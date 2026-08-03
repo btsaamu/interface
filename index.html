@@ -1,0 +1,1199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bulldog Transit System - Driver Log</title>
+</head>
+<body>
+<style>
+  :root{
+    --maroon:#7A1F2B; --maroon-dark:#4F1119; --gold:#C9A227; --gold-light:#F4E7C2;
+    --cream:#FBF7F0; --ink:#241512; --led-bg:#14100A; --led-amber:#FFB000;
+    --alert-red:#D6402F; --warn-orange:#B5652B; --success:#3C7A5B; --muted:#8A7B6E; --line:#E4D9C4;
+  }
+  *{box-sizing:border-box;}
+  #bts-root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--cream);color:var(--ink);min-height:100%;padding:0;margin:0;}
+  .bts-h{font-weight:800;letter-spacing:0.06em;text-transform:uppercase;}
+  .headsign{background:var(--led-bg);color:var(--led-amber);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;text-shadow:0 0 6px rgba(255,176,0,0.55);padding:10px 16px;border-radius:6px;overflow:hidden;white-space:nowrap;}
+  .headsign.alert{background:#1a0d0a;color:#FF6B4A;text-shadow:0 0 8px rgba(255,90,50,0.6);animation:bts-pulse 1.4s ease-in-out infinite;}
+  @keyframes bts-pulse{0%,100%{opacity:1;}50%{opacity:0.55;}}
+  .bts-top{background:var(--maroon);color:var(--gold-light);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .bts-top .crest{display:flex;align-items:center;gap:10px;}
+  .bts-top .crest-dot{width:30px;height:30px;border-radius:50%;background:var(--gold);color:var(--maroon-dark);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;}
+  .bts-top .title{font-size:15px;letter-spacing:0.08em;}
+  .bts-top .sub{font-size:11px;color:var(--gold);opacity:0.85;}
+  .bts-switch{background:transparent;border:1px solid var(--gold);color:var(--gold-light);padding:6px 10px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;}
+  .bts-switch:hover{background:rgba(201,162,39,0.15);}
+  .pending-pill{background:var(--warn-orange);color:white;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:0.03em;}
+  .bts-wrap{max-width:720px;margin:0 auto;padding:16px;}
+  .bts-wrap.wide{max-width:1080px;}
+  .role-pick{display:flex;flex-direction:column;gap:14px;padding:40px 20px;max-width:420px;margin:0 auto;}
+  .role-btn{background:white;border:2px solid var(--line);border-radius:12px;padding:22px;text-align:left;cursor:pointer;transition:border-color .15s, transform .15s;}
+  .role-btn:hover{border-color:var(--maroon);transform:translateY(-1px);}
+  .role-btn .rb-title{font-weight:800;font-size:17px;color:var(--maroon);text-transform:uppercase;letter-spacing:0.04em;}
+  .role-btn .rb-sub{font-size:13px;color:var(--muted);margin-top:4px;}
+  .card{background:white;border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px;}
+  .card-label{font-size:11px;font-weight:800;color:var(--maroon);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+  .field-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+  .field{flex:1;min-width:120px;}
+  .field label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:600;}
+  .field input, .field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:7px;font-size:14px;background:var(--cream);color:var(--ink);}
+  .field input:focus, .field select:focus{outline:2px solid var(--maroon);outline-offset:1px;}
+  .btn{border:none;border-radius:8px;padding:12px 16px;font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:0.04em;cursor:pointer;width:100%;}
+  .btn-primary{background:var(--maroon);color:var(--gold-light);}
+  .btn-primary:hover{background:var(--maroon-dark);}
+  .btn-primary:disabled{background:var(--muted);cursor:not-allowed;}
+  .btn-gold{background:var(--gold);color:var(--maroon-dark);}
+  .btn-outline{background:transparent;border:1.5px solid var(--maroon);color:var(--maroon);}
+  .btn-small{width:auto;padding:7px 11px;font-size:11.5px;}
+  .link-btn{background:none;border:none;color:var(--maroon);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:0.03em;cursor:pointer;padding:2px 6px;}
+  .link-btn.danger{color:var(--alert-red);}
+  .disclosure{background:var(--gold-light);border:1px solid var(--gold);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--maroon-dark);margin-bottom:10px;}
+  .mono{font-family:ui-monospace,monospace;font-size:11px;color:var(--muted);}
+  .empty-note{color:var(--muted);font-size:13px;padding:10px 0;}
+  .tag{font-size:10px;font-weight:800;padding:2px 6px;border-radius:5px;text-transform:uppercase;}
+  .tag.over{background:var(--alert-red);color:white;}
+  .tag.ok{background:var(--success);color:white;}
+  .tag.edited{background:var(--gold);color:var(--maroon-dark);}
+  .tag.ack{background:var(--success);color:white;}
+
+  .big-route-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .big-route-btn{padding:26px 8px;border:3px solid var(--line);border-radius:14px;background:white;text-align:center;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:0.02em;color:var(--maroon-dark);cursor:pointer;}
+  .big-route-btn:active{background:var(--gold-light);border-color:var(--maroon);}
+  .big-route-btn.active{background:var(--gold-light);border-color:var(--maroon);color:var(--maroon-dark);}
+  .landscape-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
+  .big-block{flex:1;min-width:150px;background:var(--cream);border:2px solid var(--line);border-radius:14px;padding:12px;text-align:center;}
+  .big-label{font-size:12px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--maroon);margin-bottom:8px;}
+  .big-num{font-size:40px;font-weight:800;font-family:ui-monospace,monospace;line-height:1;min-width:44px;display:inline-block;}
+  .big-stepper{display:flex;align-items:center;justify-content:center;gap:10px;}
+  .big-stepper button{width:56px;height:56px;font-size:28px;border-radius:12px;border:1px solid var(--line);background:white;font-weight:800;color:var(--maroon);cursor:pointer;}
+  .big-stepper.over .big-num{color:var(--alert-red);}
+  .big-time-input{width:100%;text-align:center;font-size:24px;font-weight:800;font-family:ui-monospace,monospace;border:1px solid var(--line);border-radius:8px;padding:8px;background:white;margin-bottom:4px;}
+  .big-toggle{width:100%;padding:18px 6px;border-radius:12px;font-size:15px;font-weight:800;text-transform:uppercase;letter-spacing:0.03em;border:3px solid var(--line);background:white;color:var(--ink);cursor:pointer;}
+  .big-toggle.active{background:var(--alert-red);border-color:var(--alert-red);color:white;}
+  .big-log-btn{padding:22px;font-size:18px;margin-top:6px;}
+
+  .info-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px dashed var(--line);}
+  .info-row:last-of-type{border-bottom:none;}
+
+  .log-entry{border-bottom:1px solid var(--line);padding:8px 0;font-size:13px;}
+  .log-entry:last-child{border-bottom:none;}
+  .log-entry.overflow{background:#FCEAE6;}
+
+  .pt-item{border-bottom:1px solid var(--line);padding:10px 0;}
+  .pt-item:last-child{border-bottom:none;}
+  .pt-item-label{font-size:13px;font-weight:600;margin-bottom:6px;}
+  .pt-btns{display:flex;gap:6px;}
+  .pt-btn{flex:1;padding:11px 4px;border:2px solid var(--line);border-radius:8px;background:white;font-weight:800;font-size:12px;text-transform:uppercase;cursor:pointer;}
+  .pt-btn.sel-good{background:var(--success);color:white;border-color:var(--success);}
+  .pt-btn.sel-bad{background:var(--alert-red);color:white;border-color:var(--alert-red);}
+  .pt-btn.sel-na{background:var(--muted);color:white;border-color:var(--muted);}
+  .pt-explain{width:100%;margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:13px;}
+  .pt-item.pt-error{border:2px solid var(--alert-red);border-radius:8px;padding:10px;background:#FCEAE6;}
+  .pt-error-field{border:2px solid var(--alert-red) !important;background:#FCEAE6 !important;}
+
+  .exception-item{background:#FBF1E6;border:1px solid var(--warn-orange);border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:12.5px;color:var(--warn-orange);font-weight:600;}
+  .issue-item{background:#FCEAE6;border:1px solid var(--alert-red);border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:12.5px;color:var(--alert-red);font-weight:600;}
+  .alert-item{display:flex;justify-content:space-between;align-items:center;background:#FCEAE6;border:1px solid var(--alert-red);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px;}
+  .alert-item .a-txt{font-weight:700;color:var(--alert-red);}
+  .alert-item .a-time{font-size:11px;color:var(--muted);font-weight:600;}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px;}
+  .stat-box{background:white;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center;}
+  .stat-box .num{font-size:26px;font-weight:800;color:var(--maroon);font-family:ui-monospace,monospace;}
+  .stat-box .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;font-weight:700;}
+  table.feed{width:100%;border-collapse:collapse;font-size:11px;}
+  table.feed th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);border-bottom:2px solid var(--line);padding:6px 5px;}
+  table.feed td{padding:6px 5px;border-bottom:1px solid var(--line);}
+  table.feed tr.overflow td{background:#FCEAE6;color:var(--alert-red);font-weight:700;}
+  .gps-link{color:var(--maroon);text-decoration:underline;font-size:11px;}
+  .top-actions{display:flex;gap:8px;align-items:center;}
+</style>
+
+<div id="bts-root">
+  <div id="bts-topbar" class="bts-top" style="display:none;">
+    <div class="crest">
+      <div class="crest-dot">B</div>
+      <div><div class="title bts-h">Bulldog Transit</div><div class="sub" id="bts-role-label">Driver Log</div></div>
+    </div>
+    <div class="top-actions">
+      <span id="pending-badge"></span>
+      <button class="bts-switch" id="bts-switch-role">Switch Role</button>
+    </div>
+  </div>
+
+  <div id="bts-role-pick" class="role-pick">
+    <div style="text-align:center;margin-bottom:6px;">
+      <div class="bts-h" style="color:var(--maroon);font-size:20px;">Bulldog Transit System</div>
+      <div style="color:var(--muted);font-size:13px;">Off-campus shuttle ridership log</div>
+    </div>
+    <div class="role-btn" id="pick-driver"><div class="rb-title">I'm a Driver</div><div class="rb-sub">Pre-trip, log stops, post-trip</div></div>
+    <div class="role-btn" id="pick-dispatch"><div class="rb-title">I'm Dispatch</div><div class="rb-sub">Live feed, alerts, inspections</div></div>
+  </div>
+
+  <div id="bts-driver-view" class="bts-wrap" style="display:none;"></div>
+  <div id="bts-dispatch-view" class="bts-wrap wide" style="display:none;"></div>
+</div>
+
+<script>
+(function(){
+  const DEFAULT_CAPACITY = 14;
+  const ROUTES = {
+    dean:       {label:"Dean",        stops:["Dean"]},
+    waterleaf:  {label:"Waterleaf",   stops:["Waterleaf"]},
+    combo:      {label:"Constellation/Waterleaf/Dean", stops:["Constellation","Waterleaf","Dean"]},
+    huntsville: {label:"Huntsville Place", stops:["Huntsville Place"]},
+    elroy1:     {label:"Elroy 1",      stops:["Elroy"]},
+    elroy2:     {label:"Elroy 2",      stops:["Elroy"]}
+  };
+  const SCHEDULE_SLOTS = ["7:05 AM","8:05 AM","9:05 AM","10:05 AM","11:05 AM","12:05 PM","1:05 PM","2:05 PM","3:05 PM","4:05 PM","5:05 PM"];
+  function routeShort(key){ return ROUTES[key].label; }
+  function parseSlotMinutes(slot){
+    const m = slot.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    let h = parseInt(m[1],10), mins = parseInt(m[2],10);
+    const ap = m[3].toUpperCase();
+    if(ap==='PM' && h!==12) h+=12;
+    if(ap==='AM' && h===12) h=0;
+    return h*60+mins;
+  }
+  function nowMinutes(){ const d=new Date(); return d.getHours()*60+d.getMinutes(); }
+  function nearestSlot(){
+    const nowMin = nowMinutes();
+    let best = SCHEDULE_SLOTS[0], bestDiff = Infinity;
+    SCHEDULE_SLOTS.forEach(s=>{ const diff = Math.abs(parseSlotMinutes(s)-nowMin); if(diff<bestDiff){ bestDiff=diff; best=s; } });
+    return best;
+  }
+
+  const PRETRIP_ITEMS = [
+    "Fluid levels & leaks (oil, coolant, washer fluid — any leaks or puddles?)",
+    "Belts, hoses & battery (visible wear, corrosion, secure connections)",
+    "Brake warning light & brake performance",
+    "Brake lights, reverse lights & parking brake",
+    "Exterior lights (headlights, signals, hazards, clearance lights)",
+    "Horn",
+    "Steering & wipers/washers",
+    "Mirrors, windshield & windows (clean, unbroken, properly adjusted)",
+    "Tires & wheels (tread, pressure, lug nuts)",
+    "Body condition (new dents, scrapes, damage)",
+    "Interior condition (seats, floor, cleanliness)",
+    "Safety equipment (fire extinguisher, first aid kit, reflectors)"
+  ];
+  const POSTTRIP_ITEMS = [
+    "Did you notice any issues with the brakes during your shift?",
+    "Did you notice any issues with the lights (headlights, signals, hazards, or brake lights)?",
+    "Did you notice any issues with the horn?",
+    "Did you notice any pulling, looseness, or alignment issues with the steering?",
+    "Did you notice any tire issues (pressure, wear, or damage)?",
+    "Did you notice any battery or electrical issues?",
+    "Did you notice any issues with the doors or windows?",
+    "Did any damage occur to this vehicle during your shift?"
+  ];
+
+  function todayKey(){
+    const d = new Date();
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  }
+  function todayDisplay(){ return new Date().toLocaleDateString([], {month:"short", day:"numeric", year:"numeric"}); }
+  function nowTime(){ return new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}); }
+  function fmtSysTime(iso){ if(!iso) return ""; return new Date(iso).toLocaleTimeString([], {hour:"numeric", minute:"2-digit", second:"2-digit"}); }
+  function fmtGeoShort(lat,lng,gpsError){ if(lat==null||lng==null) return `no GPS${gpsError?` (${gpsError})`:''}`; return `${lat.toFixed(4)}, ${lng.toFixed(4)}`; }
+  function dayStorageKey(){ return "bts-day-"+todayKey(); }
+
+  function getGeo(){
+    return new Promise(resolve=>{
+      if(!navigator.geolocation){ resolve({lat:null,lng:null,gpsError:"unsupported"}); return; }
+      const t = setTimeout(()=>resolve({lat:null,lng:null,gpsError:"timeout"}), 6500);
+      navigator.geolocation.getCurrentPosition(
+        pos => { clearTimeout(t); resolve({lat:pos.coords.latitude, lng:pos.coords.longitude, gpsError:null}); },
+        err => { clearTimeout(t); resolve({lat:null,lng:null,gpsError:err.message||"denied"}); },
+        {enableHighAccuracy:true, timeout:6000, maximumAge:15000}
+      );
+    });
+  }
+
+  // ---- storage helpers ----
+  async function loadDayForWrite(){
+    try{
+      const r = await window.storage.get(dayStorageKey(), true);
+      return {data: r ? JSON.parse(r.value) : {trips:[]}, ok:true};
+    }catch(e){
+      // get() throws both when the key genuinely doesn't exist yet (normal on the
+      // first write of a new day) and on a real fetch failure — list() lets us
+      // tell those apart instead of refusing to ever write on day one.
+      try{
+        const listRes = await window.storage.list(dayStorageKey(), true);
+        const exists = listRes && listRes.keys && listRes.keys.includes(dayStorageKey());
+        if(!exists) return {data:{trips:[]}, ok:true};
+        return {data:null, ok:false};
+      }catch(e2){ return {data:null, ok:false}; }
+    }
+  }
+  async function loadDayReadOnly(){ const res = await loadDayForWrite(); return res.ok ? res.data : (state.lastKnownDay || {trips:[]}); }
+  async function loadDayWithRetry(maxAttempts, delayMs){
+    maxAttempts = maxAttempts || 4; delayMs = delayMs || 700;
+    for(let i=0;i<maxAttempts;i++){
+      const res = await loadDayForWrite();
+      if(res.ok) return res.data;
+      if(i < maxAttempts-1) await new Promise(r=>setTimeout(r, delayMs*(i+1)));
+    }
+    return state.lastKnownDay || {trips:[]};
+  }
+  async function saveDay(data){ try{ await window.storage.set(dayStorageKey(), JSON.stringify(data), true); return true; } catch(e){ return false; } }
+  async function loadDriverProfile(){ try{ const r = await window.storage.get("bts-driver-profile", false); return r ? JSON.parse(r.value) : {}; } catch(e){ return {}; } }
+  async function saveDriverProfile(p){ try{ await window.storage.set("bts-driver-profile", JSON.stringify(p), false); }catch(e){} }
+  function normalizeName(n){ return (n||"").trim().toLowerCase(); }
+  async function getPinRecord(name){ try{ const r = await window.storage.get("bts-pin-"+normalizeName(name), true); return JSON.parse(r.value); } catch(e){ return null; } }
+  async function getPin(name){ const rec = await getPinRecord(name); return rec ? rec.pin : null; }
+  async function setPin(name, pin){ try{ await window.storage.set("bts-pin-"+normalizeName(name), JSON.stringify({pin, displayName:name.trim()}), true); }catch(e){} }
+  async function getVehicleCapacity(vehicleName){ try{ const r = await window.storage.get("bts-vehicle-cap-"+normalizeName(vehicleName), true); return r ? JSON.parse(r.value).capacity : null; } catch(e){ return null; } }
+  async function setVehicleCapacity(vehicleName, cap){ try{ await window.storage.set("bts-vehicle-cap-"+normalizeName(vehicleName), JSON.stringify({capacity:cap}), true); }catch(e){} }
+  function blankShift(){ return {pretrip:null, shiftEnded:false, posttrip:null, ridershipSubmitted:false}; }
+  async function getShiftRecord(name){
+    try{
+      const r = await window.storage.get("bts-shift-"+normalizeName(name)+"-"+todayKey(), true);
+      if(!r) return {shifts:[blankShift()]};
+      const rec = JSON.parse(r.value);
+      if(rec.shifts && rec.shifts.length) return rec;
+      return {shifts:[{pretrip:rec.pretrip||null, shiftEnded:rec.shiftEnded||false, posttrip:rec.posttrip||null, ridershipSubmitted:rec.ridershipSubmitted||false}]};
+    }catch(e){ return {shifts:[blankShift()]}; }
+  }
+  async function saveShiftRecord(name, record){ try{ await window.storage.set("bts-shift-"+normalizeName(name)+"-"+todayKey(), JSON.stringify(record), true); }catch(e){} }
+  function currentShift(){ return state.shiftRecord.shifts[state.shiftRecord.shifts.length-1]; }
+
+  // ---- sync / offline queue ----
+  function markPending(id){ state.pendingIds.add(id); renderPendingBadge(); }
+  function clearPending(id){ state.pendingIds.delete(id); renderPendingBadge(); }
+  function getLocalTrip(id){ if(state.myTrip && state.myTrip.id===id) return state.myTrip; return state.myCompletedTrips.find(t=>t.id===id) || null; }
+  async function syncTrip(trip){
+    const res = await loadDayForWrite();
+    if(!res.ok){ markPending(trip.id); return false; }
+    const day = res.data;
+    const idx = day.trips.findIndex(x=>x.id===trip.id);
+    if(idx===-1) day.trips.push(trip); else day.trips[idx]=trip;
+    const saved = await saveDay(day);
+    if(saved){ state.lastKnownDay = day; clearPending(trip.id); return true; }
+    markPending(trip.id); return false;
+  }
+  async function flushPending(){
+    if(state.pendingIds.size===0) return;
+    for(const id of Array.from(state.pendingIds)){ const t = getLocalTrip(id); if(t) await syncTrip(t); }
+  }
+  function renderPendingBadge(){
+    const el = document.getElementById("pending-badge");
+    if(!el) return;
+    el.innerHTML = state.pendingIds.size>0 ? `<span class="pending-pill">${state.pendingIds.size} pending sync</span>` : "";
+  }
+
+  let state = {
+    role:null, driverProfile:{}, driverLock:{status:'locked', name:'', vehicle:''},
+    myTrip:null, myCompletedTrips:[], shiftRoute:null, shiftVehicle:null, shiftCapacity:null,
+    selectedRouteChoice:null, pretripAnswers:{}, pretripPhoto:null, postTripAnswers:{}, shiftRecord:null,
+    stopPhase:'arriving', pendingStop:null, divertedName:'',
+    pendingIds:new Set(), changingRoute:false,
+    day:{trips:[]}, lastKnownDay:{trips:[]}, pollHandle:null, flushHandle:null
+  };
+  state.flushHandle = setInterval(flushPending, 8000);
+
+  const topbar = document.getElementById("bts-topbar");
+  const roleLabel = document.getElementById("bts-role-label");
+  const rolePick = document.getElementById("bts-role-pick");
+  const driverView = document.getElementById("bts-driver-view");
+  const dispatchView = document.getElementById("bts-dispatch-view");
+
+  document.getElementById("pick-driver").onclick = () => enterRole("driver");
+  document.getElementById("pick-dispatch").onclick = () => enterRole("dispatch");
+  document.getElementById("bts-switch-role").onclick = () => logoutDriver();
+
+  function logoutDriver(){
+    if(state.pollHandle) clearInterval(state.pollHandle);
+    state.role = null; state.driverLock = {status:'locked', name:'', vehicle:''};
+    state.myTrip = null; state.myCompletedTrips = [];
+    state.shiftRoute=null; state.shiftVehicle=null; state.shiftCapacity=null; state.selectedRouteChoice=null;
+    state.shiftRecord=null; state.pretripAnswers={}; state.pretripPhoto=null; state.postTripAnswers={};
+    topbar.style.display="none"; driverView.style.display="none"; dispatchView.style.display="none";
+    rolePick.style.display="flex";
+  }
+
+  async function enterRole(role){
+    state.role = role;
+    rolePick.style.display = "none";
+    topbar.style.display = "flex";
+    if(role === "driver"){
+      roleLabel.textContent = "Driver Log";
+      driverView.style.display = "block";
+      renderDriverGate();
+    } else {
+      roleLabel.textContent = "Dispatch Dashboard";
+      dispatchView.style.display = "block";
+      renderDispatchGate();
+    }
+  }
+
+  async function getDispatchPassword(){
+    try{ const r = await window.storage.get("bts-dispatch-password", true); return r ? JSON.parse(r.value).password : null; }
+    catch(e){ return null; }
+  }
+  async function setDispatchPassword(pw){
+    try{ await window.storage.set("bts-dispatch-password", JSON.stringify({password:pw}), true); }catch(e){}
+  }
+
+  async function renderDispatchGate(){
+    const existing = await getDispatchPassword();
+    dispatchView.innerHTML = `
+      <div class="card" style="max-width:380px;margin:40px auto;">
+        <div class="card-label">Dispatch Sign-In</div>
+        ${existing ? '' : '<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px;">No dispatch password set yet — whatever you enter below will become it.</div>'}
+        <div class="field-row">
+          <div class="field"><label>Password</label><input id="dispatch-pw" type="password" placeholder="Dispatch password"></div>
+        </div>
+        <div id="dispatch-pw-err" style="color:var(--alert-red);font-size:12px;margin-bottom:6px;"></div>
+        <button class="btn btn-primary" id="dispatch-pw-btn">${existing ? 'Login' : 'Set Password &amp; Login'}</button>
+      </div>
+    `;
+    document.getElementById("dispatch-pw-btn").onclick = async () => {
+      const pw = document.getElementById("dispatch-pw").value;
+      if(!pw){ document.getElementById("dispatch-pw-err").textContent = "Enter a password."; return; }
+      if(!existing){
+        await setDispatchPassword(pw);
+        await refreshDispatch();
+        state.pollHandle = setInterval(refreshDispatch, 5000);
+        return;
+      }
+      if(pw === existing){
+        await refreshDispatch();
+        state.pollHandle = setInterval(refreshDispatch, 5000);
+      } else {
+        document.getElementById("dispatch-pw-err").textContent = "Incorrect password.";
+      }
+    };
+  }
+
+  // ================= LOGIN =================
+  function renderDriverGate(){
+    driverView.innerHTML = `
+      <div class="card">
+        <div class="card-label">Driver Sign-In</div>
+        <div class="field-row">
+          <div class="field"><label>Driver Name</label><input id="gate-name" placeholder="Your name"></div>
+          <div class="field"><label>PIN</label><input id="gate-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN"></div>
+        </div>
+        <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px;">First time? Just pick any 4-digit PIN — it'll be remembered for next time.</div>
+        <div id="gate-err" style="color:var(--alert-red);font-size:12px;margin-bottom:6px;"></div>
+        <button class="btn btn-primary" id="gate-login">Login</button>
+      </div>
+    `;
+    document.getElementById("gate-login").onclick = async () => {
+      const name = document.getElementById("gate-name").value.trim();
+      const pin = document.getElementById("gate-pin").value.trim();
+      if(!name){ document.getElementById("gate-err").textContent = "Enter your name."; return; }
+      if(!/^\d{4}$/.test(pin)){ document.getElementById("gate-err").textContent = "PIN must be 4 digits."; return; }
+      const btn = document.getElementById("gate-login"); btn.disabled = true; btn.textContent = "Checking…";
+      const rec = await getPinRecord(name);
+      if(rec == null){ await setPin(name, pin); await unlockDriver(name); return; }
+      if(pin === rec.pin){ await unlockDriver(rec.displayName || name); return; }
+      btn.disabled = false; btn.textContent = "Login";
+      document.getElementById("gate-err").textContent = "Incorrect PIN. Try again.";
+    };
+  }
+
+  async function unlockDriver(name){
+    state.driverLock = {status:'unlocked', name, vehicle:''};
+    const profile = await loadDriverProfile();
+    state.driverLock.vehicle = profile.vehicle || "";
+    const day = await loadDayWithRetry();
+    const mine = day.trips.filter(t=>normalizeName(t.driver)===normalizeName(name) && t.date===todayKey());
+    state.myCompletedTrips = mine.filter(t=>t.complete);
+    state.myTrip = mine.find(t=>!t.complete) || null;
+    if(state.myTrip){
+      const t = state.myTrip;
+      const routeDef = ROUTES[t.route];
+      if(!t.departAAMU) state.stopPhase = 'depart_campus';
+      else if(routeDef && t.stops.length >= routeDef.stops.length) state.stopPhase = 'arrive_campus';
+      else state.stopPhase = 'arriving';
+      state.pendingStop = null; state.divertedName = '';
+    }
+    state.shiftRecord = await getShiftRecord(name);
+    const cs0 = currentShift();
+    if(cs0.pretrip){
+      state.shiftRoute = cs0.pretrip.route;
+      state.shiftVehicle = cs0.pretrip.vehicle;
+      state.shiftCapacity = cs0.pretrip.capacity;
+      state.selectedRouteChoice = cs0.pretrip.route;
+    }
+    state.pretripAnswers = {}; state.pretripPhoto = null; state.postTripAnswers = {};
+    await renderDriverHome();
+  }
+
+  async function renderDriverHome(){
+    if(state.driverLock.status !== 'unlocked'){ renderDriverGate(); return; }
+    const cs = currentShift();
+    if(cs.shiftEnded){
+      if(!cs.posttrip || !cs.posttrip.done){ renderPostTripPage(); return; }
+      renderDaySummaryPage(); return;
+    }
+    if(state.myTrip && !state.myTrip.complete){ renderLogPage(); return; }
+    renderPretripPage();
+  }
+
+  // ================= PRE-TRIP PAGE =================
+  function renderPretripPage(){
+    const lock = state.driverLock;
+    const already = !!(currentShift().pretrip && currentShift().pretrip.done);
+    driverView.innerHTML = `
+      <div class="card">
+        <div class="card-label">Driver <button class="link-btn" id="change-driver-btn">Change Driver</button></div>
+        <div style="font-weight:800;font-size:16px;color:var(--maroon-dark);">${lock.name}</div>
+        <div class="mono" style="margin-bottom:10px;">${todayDisplay()}</div>
+        <div class="field-row">
+          <div class="field"><label>Vehicle</label><input id="d-vehicle" value="${state.shiftVehicle||lock.vehicle||''}" placeholder="Van # or borrowed vehicle name"></div>
+          <div class="field"><label>Capacity</label><input id="d-capacity" type="number" min="1" value="${state.shiftCapacity||DEFAULT_CAPACITY}"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-label">Pick Route</div>
+        <div class="big-route-grid" id="route-grid"></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Pre-Trip Inspection</div>
+        ${already
+          ? `<div class="disclosure">✓ Pre-trip completed today at ${fmtSysTime(currentShift().pretrip.completedAt)}${currentShift().pretrip.checklist.some(c=>c.status==='bad')?' — issue(s) were reported.':''}</div>
+             <div class="info-row"><span>Starting Mileage</span><strong>${currentShift().pretrip.startingMileage||'—'}</strong></div>`
+          : `<div class="field-row">
+               <div class="field"><label>Starting Mileage</label><input id="pt-mileage" type="number" min="0" placeholder="Odometer reading"></div>
+             </div>
+             <div id="pretrip-items"></div>
+             <div class="pt-item">
+               <div class="pt-item-label">Photo of any damage (optional)</div>
+               <input type="file" accept="image/*" capture="environment" id="pt-photo">
+               <div id="pt-photo-preview"></div>
+             </div>`
+        }
+      </div>
+      <button class="btn btn-primary big-log-btn" id="begin-route-btn">BEGIN ROUTE</button>
+    `;
+    const vInput = document.getElementById("d-vehicle");
+    vInput.onblur = async () => { const cap = await getVehicleCapacity(vInput.value.trim()); if(cap) document.getElementById("d-capacity").value = cap; };
+    vInput.oninput = () => { if(vInput.value.trim()) vInput.classList.remove("pt-error-field"); };
+
+    const grid = document.getElementById("route-grid");
+    Object.keys(ROUTES).forEach(key=>{
+      const btn = document.createElement("div");
+      btn.className = "big-route-btn" + (state.selectedRouteChoice===key ? " active" : "");
+      btn.textContent = routeShort(key); btn.tabIndex = 0;
+      btn.onclick = () => {
+        state.selectedRouteChoice = key;
+        [...grid.children].forEach(c=>c.classList.remove("active"));
+        btn.classList.add("active");
+        grid.style.outline = "";
+      };
+      grid.appendChild(btn);
+    });
+
+    if(!already){
+      const itemsBox = document.getElementById("pretrip-items");
+      itemsBox.innerHTML = PRETRIP_ITEMS.map((item,i)=>`
+        <div class="pt-item">
+          <div class="pt-item-label">${item}</div>
+          <div class="pt-btns" data-idx="${i}">
+            <button class="pt-btn" data-val="good">Good</button>
+            <button class="pt-btn" data-val="bad">Bad</button>
+            <button class="pt-btn" data-val="na">N/A</button>
+          </div>
+          <input type="text" class="pt-explain" id="ptx-explain-${i}" placeholder="Describe the issue" style="display:none;">
+        </div>
+      `).join("");
+      itemsBox.querySelectorAll(".pt-btns").forEach(group=>{
+        const idx = group.dataset.idx;
+        group.querySelectorAll(".pt-btn").forEach(btn=>{
+          btn.onclick = () => {
+            group.querySelectorAll(".pt-btn").forEach(b=>b.classList.remove("sel-good","sel-bad","sel-na"));
+            btn.classList.add("sel-"+btn.dataset.val);
+            state.pretripAnswers[idx] = btn.dataset.val;
+            document.getElementById("ptx-explain-"+idx).style.display = btn.dataset.val==='bad' ? 'block' : 'none';
+            group.closest(".pt-item").classList.remove("pt-error");
+          };
+        });
+      });
+      itemsBox.querySelectorAll(".pt-explain").forEach(inp=>{
+        inp.oninput = () => { if(inp.value.trim()) inp.closest(".pt-item").classList.remove("pt-error"); };
+      });
+      document.getElementById("pt-mileage").oninput = (e) => { if(e.target.value.trim()) e.target.classList.remove("pt-error-field"); };
+      document.getElementById("pt-photo").onchange = (e) => {
+        const file = e.target.files[0]; if(!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          state.pretripPhoto = reader.result;
+          document.getElementById("pt-photo-preview").innerHTML = `<img src="${reader.result}" style="max-width:140px;border-radius:8px;margin-top:6px;">`;
+        };
+        reader.readAsDataURL(file);
+      };
+    }
+
+    document.getElementById("change-driver-btn").onclick = () => logoutDriver();
+    document.getElementById("begin-route-btn").onclick = async () => { await beginRoute(already); };
+  }
+
+  async function beginRoute(already){
+    document.getElementById("route-grid").style.outline = "";
+    document.getElementById("d-vehicle").classList.remove("pt-error-field");
+    const vehicle = document.getElementById("d-vehicle").value.trim();
+    const capacity = parseInt(document.getElementById("d-capacity").value,10) || DEFAULT_CAPACITY;
+    let firstError = null;
+
+    if(!state.selectedRouteChoice){
+      const grid = document.getElementById("route-grid");
+      grid.style.outline = "2px solid var(--alert-red)"; grid.style.borderRadius = "10px";
+      firstError = firstError || grid;
+    }
+    if(!vehicle){
+      const vf = document.getElementById("d-vehicle");
+      vf.classList.add("pt-error-field");
+      firstError = firstError || vf;
+    }
+
+    if(!already){
+      const mileageInput = document.getElementById("pt-mileage");
+      const mileage = mileageInput.value.trim();
+      if(!mileage){ mileageInput.classList.add("pt-error-field"); firstError = firstError || mileageInput; }
+
+      PRETRIP_ITEMS.forEach((_,i)=>{
+        const itemEl = document.getElementById("ptx-explain-"+i).closest(".pt-item");
+        const answered = !!state.pretripAnswers[i];
+        const needsExplain = state.pretripAnswers[i]==='bad' && !document.getElementById("ptx-explain-"+i).value.trim();
+        if(!answered || needsExplain){ itemEl.classList.add("pt-error"); firstError = firstError || itemEl; }
+        else { itemEl.classList.remove("pt-error"); }
+      });
+
+      if(!mileage || PRETRIP_ITEMS.some((_,i)=> !state.pretripAnswers[i] || (state.pretripAnswers[i]==='bad' && !document.getElementById("ptx-explain-"+i).value.trim()))){
+        if(firstError) firstError.scrollIntoView({behavior:"smooth", block:"center"});
+        return;
+      }
+    }
+    if(!state.selectedRouteChoice || !vehicle){
+      if(firstError) firstError.scrollIntoView({behavior:"smooth", block:"center"});
+      return;
+    }
+
+    if(!already){
+      const mileage = document.getElementById("pt-mileage").value.trim();
+      const checklist = PRETRIP_ITEMS.map((item,i)=>({item, status:state.pretripAnswers[i], note: state.pretripAnswers[i]==='bad' ? document.getElementById("ptx-explain-"+i).value.trim() : ""}));
+      currentShift().pretrip = {done:true, route:state.selectedRouteChoice, vehicle, capacity, startingMileage:mileage, checklist, photo: state.pretripPhoto||null, completedAt:new Date().toISOString()};
+      await saveShiftRecord(state.driverLock.name, state.shiftRecord);
+    }
+    state.shiftRoute = state.selectedRouteChoice; state.shiftVehicle = vehicle; state.shiftCapacity = capacity;
+    await setVehicleCapacity(vehicle, capacity);
+    await saveDriverProfile({name: state.driverLock.name, vehicle});
+    await startTripInternal();
+  }
+
+  async function startTripInternal(){
+    const tripsToday = [...state.myCompletedTrips, ...(state.myTrip?[state.myTrip]:[])];
+    const trip = {
+      id:"trip-"+Date.now(), route: state.shiftRoute, driver: state.driverLock.name,
+      vehicle: state.shiftVehicle, vehicleCapacity: state.shiftCapacity,
+      date: todayKey(), tripNum: tripsToday.length+1, scheduledRun: nearestSlot(),
+      departAAMU: null, departMeta: null,
+      stops:[], arriveAAMU:null, arriveMeta:null, complete:false
+    };
+    state.myTrip = trip;
+    await syncTrip(trip);
+    state.stopPhase='depart_campus'; state.pendingStop=null; state.divertedName='';
+    renderLogPage();
+  }
+
+  // ================= LOG PAGE =================
+  function activeLogSheetHtml(){
+    const entries = [];
+    [...(state.myTrip?[state.myTrip]:[]), ...state.myCompletedTrips].forEach(t=>{
+      if(t.departAAMU && t.departMeta){
+        entries.push({ts:t.departMeta.timestamp, html:`
+          <div class="log-entry ${t.departOverflow?'overflow':''}">
+            <div><strong>Depart AAMU</strong> ${t.departOverflow?'<span class="tag over">Overflow</span>':''}</div>
+            <div class="mono">${t.departAAMU} · Going ${t.departGoing||0} · Coming ${t.departComing||0}${t.departLeftBehind?` · Left behind ${t.departLeftBehind}`:''}</div>
+          </div>
+        `});
+      }
+      t.stops.forEach(s=>{
+        entries.push({ts:s.systemTimestamp, html:`
+          <div class="log-entry ${s.overflow?'overflow':''}">
+            <div><strong>${s.name}</strong>${s.diverted?' <span class="tag edited">Diverted</span>':''} ${s.overflow?'<span class="tag over">Overflow</span>':''} ${s.acknowledged?'<span class="tag ack">✓ Seen</span>':''}</div>
+            <div class="mono">Arr ${s.arrive} · Dep ${s.depart||'—'} · Going ${s.going} · Coming ${s.coming}${s.leftBehind?` · Left behind ${s.leftBehind}`:''}</div>
+          </div>
+        `});
+      });
+      if(t.arriveAAMU && t.arriveMeta){
+        entries.push({ts:t.arriveMeta.timestamp, html:`<div class="log-entry"><div><strong>Arrive AAMU</strong></div><div class="mono">${t.arriveAAMU}</div></div>`});
+      }
+    });
+    entries.sort((a,b)=> new Date(b.ts) - new Date(a.ts));
+    if(entries.length===0) return '<div class="empty-note">No stops logged yet.</div>';
+    return entries.map(e=>e.html).join("");
+  }
+
+  function renderLogPage(){
+    const trip = state.myTrip;
+    const route = ROUTES[trip.route];
+    const cap = trip.vehicleCapacity || DEFAULT_CAPACITY;
+
+    if(state.changingRoute){
+      driverView.innerHTML = `
+        <div class="card">
+          <div class="card-label">Pick New Route <button class="link-btn" id="cancel-change-route">Cancel</button></div>
+          <div class="big-route-grid" id="route-grid-change"></div>
+        </div>
+      `;
+      const grid = document.getElementById("route-grid-change");
+      Object.keys(ROUTES).forEach(key=>{
+        const btn = document.createElement("div");
+        btn.className = "big-route-btn" + (key===trip.route ? " active" : "");
+        btn.textContent = routeShort(key); btn.tabIndex = 0;
+        btn.onclick = async () => {
+          if(key === trip.route){ state.changingRoute = false; renderLogPage(); return; }
+          if(trip.stops.length>0){
+            const ok = confirm(`This trip already has ${trip.stops.length} stop(s) logged under ${routeShort(trip.route)}. Switching to ${routeShort(key)} won't relabel them. Continue?`);
+            if(!ok) return;
+          }
+          trip.route = key; state.shiftRoute = key;
+          await syncTrip(trip);
+          state.changingRoute = false;
+          renderLogPage();
+        };
+        grid.appendChild(btn);
+      });
+      document.getElementById("cancel-change-route").onclick = () => { state.changingRoute = false; renderLogPage(); };
+      return;
+    }
+
+    const nextStopIdx = trip.stops.length;
+    const defaultStopName = route.stops[Math.min(nextStopIdx, route.stops.length-1)];
+
+    driverView.innerHTML = `
+      <div class="headsign"><span>EN ROUTE → ${routeShort(trip.route).toUpperCase()}</span></div>
+      <div class="card" style="margin-top:12px;">
+        <div class="card-label">Trip Info</div>
+        <div class="info-row"><span>Date</span><strong>${todayDisplay()}</strong></div>
+        <div class="info-row"><span>Driver</span><strong>${trip.driver}</strong></div>
+        <div class="info-row"><span>Route</span><strong>${routeShort(trip.route)}</strong></div>
+        <div class="info-row"><span>Capacity</span><strong>${cap}</strong></div>
+        <button class="link-btn" id="change-route-btn" style="margin-top:6px;">Change Route</button>
+      </div>
+      ${renderStopPhaseCard(defaultStopName)}
+      <div class="card">
+        <div class="card-label">Active Log Sheet</div>
+        ${activeLogSheetHtml()}
+      </div>
+      <button class="btn btn-outline big-log-btn" id="end-shift-btn">END SHIFT</button>
+    `;
+
+    document.getElementById("change-route-btn").onclick = () => { state.changingRoute = true; renderLogPage(); };
+    document.getElementById("end-shift-btn").onclick = () => endShift();
+    wireStopPhase(trip, defaultStopName, cap, route);
+  }
+
+  function renderStopPhaseCard(defaultStopName){
+    if(state.stopPhase === 'depart_campus'){
+      return `
+        <div class="card">
+          <div class="card-label">Departing AAMU</div>
+          <div class="landscape-row">
+            <div class="big-block">
+              <div class="big-label">Time</div>
+              <input type="text" id="campus-time-input" class="big-time-input" value="${nowTime()}">
+              <button class="link-btn" id="fill-now-campus">NOW</button>
+            </div>
+            <div class="big-block">
+              <div class="big-label">Going to APT</div>
+              <div class="big-stepper" id="stepper-going" data-count="0"><button data-d="-1">−</button><span class="big-num count">0</span><button data-d="1">+</button></div>
+            </div>
+            <div class="big-block">
+              <div class="big-label">Coming to AAMU</div>
+              <div class="big-stepper" id="stepper-coming" data-count="0"><button data-d="-1">−</button><span class="big-num count">0</span><button data-d="1">+</button></div>
+            </div>
+            <div class="big-block">
+              <div class="big-label">Overflow</div>
+              <button class="big-toggle" id="overflow-toggle" data-active="0">NO OVERFLOW</button>
+              <div id="lb-refine" style="display:none;margin-top:8px;">
+                <div class="stepper" id="stepper-lb" data-count="1" style="display:flex;align-items:center;justify-content:center;gap:8px;"><button style="width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:white;" data-d="-1">−</button><span class="count" style="font-weight:800;">1</span><button style="width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:white;" data-d="1">+</button></div>
+                <div style="font-size:10px;color:var(--muted);margin-top:2px;">left behind</div>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary big-log-btn" id="log-campus-depart-btn">LOG DEPARTURE &amp; CONTINUE</button>
+        </div>
+      `;
+    }
+    if(state.stopPhase === 'arrive_campus'){
+      return `
+        <div class="card">
+          <div class="card-label">Arriving at AAMU</div>
+          <div class="big-block" style="max-width:220px;">
+            <div class="big-label">Time</div>
+            <input type="text" id="campus-time-input" class="big-time-input" value="${nowTime()}">
+            <button class="link-btn" id="fill-now-campus">NOW</button>
+          </div>
+          <button class="btn btn-primary big-log-btn" id="log-campus-arrive-btn">LOG ARRIVAL</button>
+        </div>
+      `;
+    }
+    if(state.stopPhase === 'arriving'){
+      const displayName = state.divertedName || defaultStopName;
+      return `
+        <div class="card">
+          <div class="card-label">Arriving At: ${displayName} <button class="link-btn" id="diff-loc-btn">Different location?</button></div>
+          <div id="diff-loc-box" style="display:${state.divertedName?'block':'none'};margin-bottom:8px;">
+            <input type="text" id="diff-loc-input" value="${state.divertedName||''}" placeholder="Type actual location" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;">
+          </div>
+          <div class="big-block" style="max-width:220px;">
+            <div class="big-label">Time</div>
+            <input type="text" id="arrive-time-input" class="big-time-input" value="${nowTime()}">
+            <button class="link-btn" id="fill-now-arrive">NOW</button>
+          </div>
+          <button class="btn btn-primary big-log-btn" id="log-arrival-btn">LOG ARRIVAL</button>
+        </div>
+      `;
+    }
+    const name = state.pendingStop.name;
+    return `
+      <div class="card">
+        <div class="card-label">Departing: ${name}</div>
+        <div class="landscape-row">
+          <div class="big-block">
+            <div class="big-label">Time</div>
+            <input type="text" id="depart-time-input" class="big-time-input" value="${nowTime()}">
+            <button class="link-btn" id="fill-now-depart">NOW</button>
+          </div>
+          <div class="big-block">
+            <div class="big-label">Going to APT</div>
+            <div class="big-stepper" id="stepper-going" data-count="0"><button data-d="-1">−</button><span class="big-num count">0</span><button data-d="1">+</button></div>
+          </div>
+          <div class="big-block">
+            <div class="big-label">Coming to AAMU</div>
+            <div class="big-stepper" id="stepper-coming" data-count="0"><button data-d="-1">−</button><span class="big-num count">0</span><button data-d="1">+</button></div>
+          </div>
+          <div class="big-block">
+            <div class="big-label">Overflow</div>
+            <button class="big-toggle" id="overflow-toggle" data-active="0">NO OVERFLOW</button>
+            <div id="lb-refine" style="display:none;margin-top:8px;">
+              <div class="stepper" id="stepper-lb" data-count="1" style="display:flex;align-items:center;justify-content:center;gap:8px;"><button style="width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:white;" data-d="-1">−</button><span class="count" style="font-weight:800;">1</span><button style="width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:white;" data-d="1">+</button></div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px;">left behind</div>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-primary big-log-btn" id="log-departure-btn">LOG DEPARTURE &amp; CONTINUE</button>
+      </div>
+    `;
+  }
+
+  function wireStopPhase(trip, defaultStopName, cap, route){
+    if(state.stopPhase === 'depart_campus'){
+      document.getElementById("fill-now-campus").onclick = () => { document.getElementById("campus-time-input").value = nowTime(); };
+      ["going","coming"].forEach(kind=>{
+        const box = document.getElementById("stepper-"+kind);
+        box.querySelectorAll("button").forEach(btn=>{
+          btn.onclick = () => {
+            let c = parseInt(box.dataset.count,10);
+            c = Math.max(0, c + parseInt(btn.dataset.d,10));
+            box.dataset.count = c; box.querySelector(".count").textContent = c;
+            box.classList.toggle("over", c > cap);
+          };
+        });
+      });
+      const ofToggleC = document.getElementById("overflow-toggle");
+      const lbRefineC = document.getElementById("lb-refine");
+      const lbBoxC = document.getElementById("stepper-lb");
+      ofToggleC.onclick = () => {
+        const active = ofToggleC.dataset.active === "1";
+        if(active){ ofToggleC.dataset.active="0"; ofToggleC.textContent="NO OVERFLOW"; ofToggleC.classList.remove("active"); lbRefineC.style.display="none"; }
+        else { ofToggleC.dataset.active="1"; ofToggleC.textContent="OVERFLOW"; ofToggleC.classList.add("active"); lbRefineC.style.display="block"; }
+      };
+      lbBoxC.querySelectorAll("button").forEach(btn=>{
+        btn.onclick = () => {
+          let c = parseInt(lbBoxC.dataset.count,10);
+          c = Math.max(1, c + parseInt(btn.dataset.d,10));
+          lbBoxC.dataset.count = c; lbBoxC.querySelector(".count").textContent = c;
+        };
+      });
+      document.getElementById("log-campus-depart-btn").onclick = async () => {
+        const btn = document.getElementById("log-campus-depart-btn");
+        btn.disabled = true; btn.textContent = "Logging…";
+        const time = document.getElementById("campus-time-input").value;
+        const going = parseInt(document.getElementById("stepper-going").dataset.count,10);
+        const coming = parseInt(document.getElementById("stepper-coming").dataset.count,10);
+        const overflowActive = ofToggleC.dataset.active === "1";
+        const leftBehind = overflowActive ? parseInt(lbBoxC.dataset.count,10) : 0;
+        const overflow = going > cap || coming > cap || overflowActive;
+        const geo = await getGeo();
+        trip.departAAMU = time;
+        trip.departMeta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
+        trip.departGoing = going; trip.departComing = coming; trip.departLeftBehind = leftBehind; trip.departOverflow = overflow; trip.departAcknowledged = false;
+        await syncTrip(trip);
+        state.stopPhase = 'arriving';
+        renderLogPage();
+      };
+      return;
+    }
+    if(state.stopPhase === 'arrive_campus'){
+      document.getElementById("fill-now-campus").onclick = () => { document.getElementById("campus-time-input").value = nowTime(); };
+      document.getElementById("log-campus-arrive-btn").onclick = async () => {
+        const time = document.getElementById("campus-time-input").value;
+        const geo = await getGeo();
+        trip.arriveAAMU = time;
+        trip.arriveMeta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
+        trip.complete = true;
+        state.myCompletedTrips.push(trip);
+        state.myTrip = null;
+        await syncTrip(trip);
+        await startTripInternal();
+      };
+      return;
+    }
+    if(state.stopPhase === 'arriving'){
+      document.getElementById("diff-loc-btn").onclick = () => {
+        const box = document.getElementById("diff-loc-box");
+        box.style.display = box.style.display==='none' ? 'block' : 'none';
+        if(box.style.display==='block') document.getElementById("diff-loc-input").focus();
+      };
+      document.getElementById("fill-now-arrive").onclick = () => { document.getElementById("arrive-time-input").value = nowTime(); };
+      document.getElementById("log-arrival-btn").onclick = async () => {
+        const diffInput = document.getElementById("diff-loc-input");
+        state.divertedName = diffInput ? diffInput.value.trim() : '';
+        const name = state.divertedName || defaultStopName;
+        const arrive = document.getElementById("arrive-time-input").value;
+        const geo = await getGeo();
+        state.pendingStop = { name, diverted: !!state.divertedName, arrive, arriveMeta:{timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError} };
+        state.stopPhase = 'departing';
+        renderLogPage();
+      };
+      return;
+    }
+    document.getElementById("fill-now-depart").onclick = () => { document.getElementById("depart-time-input").value = nowTime(); };
+    ["going","coming"].forEach(kind=>{
+      const box = document.getElementById("stepper-"+kind);
+      box.querySelectorAll("button").forEach(btn=>{
+        btn.onclick = () => {
+          let c = parseInt(box.dataset.count,10);
+          c = Math.max(0, c + parseInt(btn.dataset.d,10));
+          box.dataset.count = c; box.querySelector(".count").textContent = c;
+          box.classList.toggle("over", c > cap);
+        };
+      });
+    });
+    const ofToggle = document.getElementById("overflow-toggle");
+    const lbRefine = document.getElementById("lb-refine");
+    const lbBox = document.getElementById("stepper-lb");
+    ofToggle.onclick = () => {
+      const active = ofToggle.dataset.active === "1";
+      if(active){ ofToggle.dataset.active="0"; ofToggle.textContent="NO OVERFLOW"; ofToggle.classList.remove("active"); lbRefine.style.display="none"; }
+      else { ofToggle.dataset.active="1"; ofToggle.textContent="OVERFLOW"; ofToggle.classList.add("active"); lbRefine.style.display="block"; }
+    };
+    lbBox.querySelectorAll("button").forEach(btn=>{
+      btn.onclick = () => {
+        let c = parseInt(lbBox.dataset.count,10);
+        c = Math.max(1, c + parseInt(btn.dataset.d,10));
+        lbBox.dataset.count = c; lbBox.querySelector(".count").textContent = c;
+      };
+    });
+    document.getElementById("log-departure-btn").onclick = async () => {
+      const btn = document.getElementById("log-departure-btn");
+      btn.disabled = true; btn.textContent = "Logging…";
+      const depart = document.getElementById("depart-time-input").value;
+      const going = parseInt(document.getElementById("stepper-going").dataset.count,10);
+      const coming = parseInt(document.getElementById("stepper-coming").dataset.count,10);
+      const overflowActive = ofToggle.dataset.active === "1";
+      const leftBehind = overflowActive ? parseInt(lbBox.dataset.count,10) : 0;
+      const overflow = going > cap || coming > cap || overflowActive;
+      const geo = await getGeo();
+      const departMeta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
+      const stopRecord = {
+        name: state.pendingStop.name, diverted: state.pendingStop.diverted,
+        arrive: state.pendingStop.arrive, arriveMeta: state.pendingStop.arriveMeta,
+        depart, departMeta, going, coming, leftBehind, overflow, acknowledged:false,
+        systemTimestamp: state.pendingStop.arriveMeta.timestamp
+      };
+      trip.stops.push(stopRecord);
+      await syncTrip(trip);
+      state.pendingStop = null; state.divertedName='';
+
+      if(trip.stops.length >= route.stops.length){
+        state.stopPhase = 'arrive_campus';
+      } else {
+        state.stopPhase = 'arriving';
+      }
+      renderLogPage();
+    };
+  }
+
+  async function endShift(){
+    const trip = state.myTrip;
+    if(trip){
+      const geo = await getGeo();
+      const meta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
+      if(!trip.departAAMU){ trip.departAAMU = nowTime(); trip.departMeta = meta; }
+      trip.arriveAAMU = nowTime();
+      trip.arriveMeta = meta;
+      trip.complete = true;
+      state.myCompletedTrips.push(trip);
+      state.myTrip = null;
+      await syncTrip(trip);
+    }
+    currentShift().shiftEnded = true;
+    await saveShiftRecord(state.driverLock.name, state.shiftRecord);
+    state.postTripAnswers = {};
+    renderPostTripPage();
+  }
+
+  // ================= POST-TRIP PAGE =================
+  function renderPostTripPage(){
+    driverView.innerHTML = `
+      <div class="card">
+        <div class="card-label">Post-Trip Inspection</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Please answer each question before submitting.</div>
+        <div id="posttrip-items"></div>
+        <button class="btn btn-primary big-log-btn" id="submit-posttrip-btn" style="margin-top:10px;">SUBMIT POST-TRIP</button>
+      </div>
+    `;
+    const box = document.getElementById("posttrip-items");
+    box.innerHTML = POSTTRIP_ITEMS.map((q,i)=>`
+      <div class="pt-item">
+        <div class="pt-item-label">${q}</div>
+        <div class="pt-btns" data-idx="${i}">
+          <button class="pt-btn" data-val="no">No</button>
+          <button class="pt-btn" data-val="yes">Yes</button>
+        </div>
+        <input type="text" class="pt-explain" id="pp-explain-${i}" placeholder="Briefly describe" style="display:none;">
+      </div>
+    `).join("");
+    box.querySelectorAll(".pt-btns").forEach(group=>{
+      const idx = group.dataset.idx;
+      group.querySelectorAll(".pt-btn").forEach(btn=>{
+        btn.onclick = () => {
+          group.querySelectorAll(".pt-btn").forEach(b=>b.classList.remove("sel-good","sel-bad","sel-na"));
+          const val = btn.dataset.val;
+          btn.classList.add(val==='yes' ? 'sel-bad' : 'sel-good');
+          state.postTripAnswers[idx] = val;
+          document.getElementById("pp-explain-"+idx).style.display = val==='yes' ? 'block' : 'none';
+        };
+      });
+    });
+    document.getElementById("submit-posttrip-btn").onclick = async () => {
+      const missing = POSTTRIP_ITEMS.some((_,i)=> !state.postTripAnswers[i]);
+      if(missing){ alert("Please answer every question before submitting."); return; }
+      const answers = POSTTRIP_ITEMS.map((q,i)=>({question:q, answer:state.postTripAnswers[i], note: state.postTripAnswers[i]==='yes' ? (document.getElementById("pp-explain-"+i).value||"") : ""}));
+      currentShift().posttrip = {done:true, answers, completedAt:new Date().toISOString()};
+      await saveShiftRecord(state.driverLock.name, state.shiftRecord);
+      renderDaySummaryPage();
+    };
+  }
+
+  // ================= DAY SUMMARY PAGE =================
+  function renderDaySummaryPage(){
+    const going = state.myCompletedTrips.reduce((s,t)=>s+t.stops.reduce((a,x)=>a+(x.going||0),0),0);
+    const coming = state.myCompletedTrips.reduce((s,t)=>s+t.stops.reduce((a,x)=>a+(x.coming||0),0),0);
+    const alreadySubmitted = !!currentShift().ridershipSubmitted;
+    driverView.innerHTML = `
+      <div class="headsign"><span>SHIFT COMPLETE — ${state.driverLock.name.toUpperCase()}</span></div>
+      <div class="card" style="margin-top:12px;">
+        <div class="card-label">Today's Ridership Log</div>
+        ${alreadySubmitted ? `<div class="disclosure">✓ Ridership data was already submitted to your supervisor today.</div>` : ``}
+        <div class="stat-grid">
+          <div class="stat-box"><div class="num">${state.myCompletedTrips.length}</div><div class="lbl">Trips</div></div>
+          <div class="stat-box"><div class="num">${going}</div><div class="lbl">Going to APT</div></div>
+          <div class="stat-box"><div class="num">${coming}</div><div class="lbl">Coming to AAMU</div></div>
+        </div>
+        ${activeLogSheetHtml()}
+      </div>
+      <button class="btn btn-gold big-log-btn" id="submit-ridership-btn" ${alreadySubmitted?'disabled':''}>${alreadySubmitted?'SUBMITTED ✓':'SUBMIT RIDERSHIP DATA TO SUPERVISOR'}</button>
+      <button class="btn btn-outline big-log-btn" id="start-new-shift-btn" style="margin-top:10px;">START A NEW SHIFT</button>
+    `;
+    document.getElementById("start-new-shift-btn").onclick = () => startNewShift();
+    if(alreadySubmitted) return;
+    document.getElementById("submit-ridership-btn").onclick = async () => {
+      const btn = document.getElementById("submit-ridership-btn");
+      btn.disabled = true; btn.textContent = "SUBMITTED ✓";
+      currentShift().ridershipSubmitted = true;
+      await saveShiftRecord(state.driverLock.name, state.shiftRecord);
+      setTimeout(()=>{ logoutDriver(); }, 1300);
+    };
+  }
+
+  async function startNewShift(){
+    state.shiftRecord.shifts.push(blankShift());
+    await saveShiftRecord(state.driverLock.name, state.shiftRecord);
+    state.shiftRoute = null; state.shiftVehicle = null; state.shiftCapacity = null; state.selectedRouteChoice = null;
+    state.pretripAnswers = {}; state.pretripPhoto = null; state.postTripAnswers = {};
+    state.myTrip = null;
+    await renderDriverHome();
+  }
+
+  // ================= DISPATCH VIEW =================
+  async function refreshDispatch(){
+    const res = await loadDayForWrite();
+    if(res.ok){ state.day = res.data; state.lastKnownDay = res.data; }
+    else { state.day = state.lastKnownDay; }
+    const issues = await loadVehicleIssues();
+    renderDispatch(issues);
+  }
+
+  async function loadVehicleIssues(){
+    try{
+      const listRes = await window.storage.list("bts-shift-", true);
+      if(!listRes || !listRes.keys) return [];
+      const suffix = "-"+todayKey();
+      const todayKeys = listRes.keys.filter(k=>k.endsWith(suffix));
+      const issues = [];
+      for(const key of todayKeys){
+        try{
+          const r = await window.storage.get(key, true);
+          if(!r) continue;
+          const rec = JSON.parse(r.value);
+          const driverName = key.replace("bts-shift-","").replace(suffix,"");
+          const shiftsArr = rec.shifts ? rec.shifts : [rec];
+          shiftsArr.forEach(sh=>{
+            if(sh.pretrip && sh.pretrip.checklist){
+              sh.pretrip.checklist.filter(c=>c.status==='bad').forEach(c=> issues.push({driver:driverName, phase:'Pre-Trip', item:c.item, note:c.note}));
+            }
+            if(sh.posttrip && sh.posttrip.answers){
+              sh.posttrip.answers.filter(a=>a.answer==='yes').forEach(a=> issues.push({driver:driverName, phase:'Post-Trip', item:a.question, note:a.note}));
+            }
+          });
+        }catch(e){}
+      }
+      return issues;
+    }catch(e){ return []; }
+  }
+
+  function fmtGeo(lat,lng,gpsError){
+    if(lat==null || lng==null) return `<span class="mono">no GPS${gpsError?` (${gpsError})`:''}</span>`;
+    const url = `https://www.google.com/maps?q=${lat},${lng}`;
+    return `<a class="gps-link" href="${url}" target="_blank" rel="noopener">${lat.toFixed(5)}, ${lng.toFixed(5)}</a>`;
+  }
+
+  function computeExceptions(trips){
+    const exceptions = [];
+    trips.forEach(t=>{
+      if(t.complete){
+        const expected = ROUTES[t.route].stops.length;
+        if(t.stops.length < expected) exceptions.push(`Skipped stop(s): ${t.driver} — ${routeShort(t.route)} trip ${t.tripNum} ended with ${t.stops.length}/${expected} stops logged`);
+      } else {
+        const lastTs = t.stops.length ? t.stops[t.stops.length-1].systemTimestamp : (t.departMeta && t.departMeta.timestamp);
+        if(lastTs){
+          const mins = (Date.now() - new Date(lastTs).getTime())/60000;
+          if(mins > 90) exceptions.push(`No update: ${t.driver} — ${routeShort(t.route)} trip ${t.tripNum} silent for ${Math.round(mins)} min`);
+        }
+      }
+    });
+    return exceptions;
+  }
+
+  function renderDispatch(issues){
+    const trips = state.day.trips;
+    const going = trips.reduce((s,t)=>s+(t.departGoing||0)+t.stops.reduce((a,x)=>a+(x.going||0),0),0);
+    const coming = trips.reduce((s,t)=>s+(t.departComing||0)+t.stops.reduce((a,x)=>a+(x.coming||0),0),0);
+    const leftBehind = trips.reduce((s,t)=>s+(t.departLeftBehind||0)+t.stops.reduce((a,x)=>a+(x.leftBehind||0),0),0);
+    const openAlerts = [];
+    trips.forEach(t=>{
+      if(t.departOverflow && !t.departAcknowledged){
+        openAlerts.push({tripId:t.id, stopIdx:-1, route:routeShort(t.route), driver:t.driver, stop:"AAMU (Depart)",
+                          going:t.departGoing, coming:t.departComing, leftBehind:t.departLeftBehind, cap:t.vehicleCapacity||DEFAULT_CAPACITY, time:t.departAAMU});
+      }
+      t.stops.forEach((s,i)=>{
+        if(s.overflow && !s.acknowledged){
+          openAlerts.push({tripId:t.id, stopIdx:i, route:routeShort(t.route), driver:t.driver, stop:s.name,
+                            going:s.going, coming:s.coming, leftBehind:s.leftBehind, cap:t.vehicleCapacity||DEFAULT_CAPACITY, time:s.arrive});
+        }
+      });
+    });
+
+    const marquee = openAlerts.length
+      ? `<div class="headsign alert"><span>⚠ ${openAlerts.length} OVERFLOW ALERT${openAlerts.length>1?'S':''}: ` +
+        openAlerts.map(a=>`${a.route.toUpperCase()} — ${a.stop.toUpperCase()} (${Math.max(a.going,a.coming)}/${a.cap}${a.leftBehind?`, ${a.leftBehind} left behind`:''})`).join("   •   ") +
+        `</span></div>`
+      : `<div class="headsign"><span>ALL ROUTES NORMAL — NO OVERFLOW ALERTS</span></div>`;
+
+    const feedRows = trips.slice().reverse().flatMap(t=>{
+      const rows = [];
+      if(t.arriveAAMU && t.arriveMeta){
+        rows.push(`<tr><td class="mono">${fmtSysTime(t.arriveMeta.timestamp)}</td><td colspan="2">Arrive AAMU: ${t.arriveAAMU}</td><td>${routeShort(t.route)}</td><td>${t.driver}</td><td>AAMU</td><td>—</td><td>—</td><td>—</td><td>${t.vehicleCapacity||DEFAULT_CAPACITY}</td><td>${fmtGeo(t.arriveMeta.lat,t.arriveMeta.lng,t.arriveMeta.gpsError)}</td><td>—</td></tr>`);
+      }
+      t.stops.slice().reverse().forEach(s=>{
+        rows.push(`
+        <tr class="${s.overflow?'overflow':''}">
+          <td class="mono">${fmtSysTime(s.systemTimestamp)}</td>
+          <td>${s.arrive}</td><td>${s.depart||'—'}</td>
+          <td>${routeShort(t.route)}</td>
+          <td>${t.driver}</td>
+          <td>${s.name}${s.diverted?' <span class="tag edited">Div</span>':''}</td>
+          <td>${s.going}</td><td>${s.coming}</td><td>${s.leftBehind==null?'—':s.leftBehind}</td>
+          <td>${t.vehicleCapacity||DEFAULT_CAPACITY}</td>
+          <td>${fmtGeo(s.lat||s.arriveMeta&&s.arriveMeta.lat, s.lng||s.arriveMeta&&s.arriveMeta.lng, s.gpsError)}</td>
+          <td>${s.overflow ? '<span class="tag over">Overflow</span>' : '<span class="tag ok">OK</span>'}</td>
+        </tr>
+      `);
+      });
+      if(t.departAAMU && t.departMeta){
+        rows.push(`<tr class="${t.departOverflow?'overflow':''}"><td class="mono">${fmtSysTime(t.departMeta.timestamp)}</td><td colspan="2">Depart AAMU: ${t.departAAMU}</td><td>${routeShort(t.route)}</td><td>${t.driver}</td><td>AAMU</td><td>${t.departGoing||0}</td><td>${t.departComing||0}</td><td>${t.departLeftBehind==null?'—':t.departLeftBehind}</td><td>${t.vehicleCapacity||DEFAULT_CAPACITY}</td><td>${fmtGeo(t.departMeta.lat,t.departMeta.lng,t.departMeta.gpsError)}</td><td>${t.departOverflow?'<span class="tag over">Overflow</span>':'<span class="tag ok">OK</span>'}</td></tr>`);
+      }
+      return rows;
+    }).join("");
+
+    const exceptions = computeExceptions(trips);
+
+    dispatchView.innerHTML = `
+      ${marquee}
+      <div class="stat-grid" style="margin-top:14px;">
+        <div class="stat-box"><div class="num">${trips.length}</div><div class="lbl">Trips Today</div></div>
+        <div class="stat-box"><div class="num">${going}</div><div class="lbl">Going to APT</div></div>
+        <div class="stat-box"><div class="num">${coming}</div><div class="lbl">Coming to AAMU</div></div>
+        <div class="stat-box"><div class="num">${leftBehind}</div><div class="lbl">Left Behind</div></div>
+        <div class="stat-box"><div class="num">${going+coming}</div><div class="lbl">Total Students</div></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Open Overflow Alerts</div>
+        <div id="alerts-box">
+          ${openAlerts.length===0 ? '<div class="empty-note">No open alerts.</div>' :
+            openAlerts.map(a=>`
+              <div class="alert-item">
+                <div><div class="a-txt">${a.route} — ${a.stop}: ${Math.max(a.going,a.coming)} riders (cap ${a.cap})${a.leftBehind?`, ${a.leftBehind} left behind`:''}</div>
+                <div class="a-time">Driver ${a.driver} · logged ${a.time}</div></div>
+                <button class="btn btn-outline btn-small" data-trip="${a.tripId}" data-stop="${a.stopIdx}">Acknowledge</button>
+              </div>
+            `).join("")}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-label">Vehicle Inspection Issues</div>
+        ${issues.length===0 ? '<div class="empty-note">No issues reported today.</div>' : issues.map(i=>`<div class="issue-item">${i.phase} — ${i.driver}: ${i.item}${i.note?` — "${i.note}"`:''}</div>`).join("")}
+      </div>
+      <div class="card">
+        <div class="card-label">Exceptions</div>
+        ${exceptions.length===0 ? '<div class="empty-note">No exceptions detected.</div>' : exceptions.map(e=>`<div class="exception-item">${e}</div>`).join("")}
+      </div>
+      <div class="card">
+        <div class="card-label">Live Stop Feed</div>
+        <table class="feed">
+          <thead><tr><th>Sys</th><th>Arr</th><th>Dep</th><th>Route</th><th>Driver</th><th>Stop</th><th>Going</th><th>Coming</th><th>Left</th><th>Cap</th><th>GPS</th><th>Status</th></tr></thead>
+          <tbody>${feedRows || '<tr><td colspan="12" class="empty-note">No stops logged yet today.</td></tr>'}</tbody>
+        </table>
+      </div>
+    `;
+
+    dispatchView.querySelectorAll("[data-trip]").forEach(btn=>{
+      btn.onclick = async () => {
+        const res = await loadDayForWrite();
+        if(!res.ok) return;
+        const day = res.data;
+        const trip = day.trips.find(t=>t.id===btn.dataset.trip);
+        if(trip){
+          const idx = parseInt(btn.dataset.stop,10);
+          if(idx===-1) trip.departAcknowledged = true; else trip.stops[idx].acknowledged = true;
+          await saveDay(day);
+        }
+        await refreshDispatch();
+      };
+    });
+  }
+})();
+</script>
+
+</body>
+</html>
