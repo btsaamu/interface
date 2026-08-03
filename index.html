@@ -4,6 +4,77 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bulldog Transit System - Driver Log</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+  var firebaseConfig = {
+    apiKey: "AIzaSyAAtag4wPxi0lGyXaqOIyIFoSBvNPMpZZg",
+    authDomain: "bts-driver-log.firebaseapp.com",
+    databaseURL: "https://bts-driver-log-default-rtdb.firebaseio.com",
+    projectId: "bts-driver-log",
+    storageBucket: "bts-driver-log.firebasestorage.app",
+    messagingSenderId: "203074744997",
+    appId: "1:203074744997:web:5e88ea17ed9c005ad1d34c"
+  };
+  firebase.initializeApp(firebaseConfig);
+  var __db = firebase.database();
+
+  function __encodeKey(k){ return encodeURIComponent(k).replace(/\./g, "%2E"); }
+  function __decodeKey(k){ return decodeURIComponent(k.replace(/%2E/g, ".")); }
+
+  // Drop-in replacement for the storage API this tool was originally built against.
+  // shared=true  -> Firebase Realtime Database (genuinely shared across every device)
+  // shared=false -> localStorage (stays on this one device/browser, as originally intended)
+  window.storage = {
+    get: function(key, shared){
+      if(!shared){
+        var v = localStorage.getItem("bts_local_"+key);
+        if(v === null) return Promise.reject(new Error("not found"));
+        return Promise.resolve({key:key, value:v, shared:shared});
+      }
+      return __db.ref("data/"+__encodeKey(key)).get().then(function(snap){
+        if(!snap.exists()) throw new Error("not found");
+        return {key:key, value:snap.val(), shared:shared};
+      });
+    },
+    set: function(key, value, shared){
+      if(!shared){
+        localStorage.setItem("bts_local_"+key, value);
+        return Promise.resolve({key:key, value:value, shared:shared});
+      }
+      return __db.ref("data/"+__encodeKey(key)).set(value).then(function(){
+        return {key:key, value:value, shared:shared};
+      });
+    },
+    delete: function(key, shared){
+      if(!shared){
+        localStorage.removeItem("bts_local_"+key);
+        return Promise.resolve({key:key, deleted:true, shared:shared});
+      }
+      return __db.ref("data/"+__encodeKey(key)).remove().then(function(){
+        return {key:key, deleted:true, shared:shared};
+      });
+    },
+    list: function(prefix, shared){
+      if(!shared){
+        var keys = [];
+        for(var i=0;i<localStorage.length;i++){
+          var k = localStorage.key(i);
+          if(k && k.indexOf("bts_local_")===0){
+            var realKey = k.slice("bts_local_".length);
+            if(realKey.indexOf(prefix||"")===0) keys.push(realKey);
+          }
+        }
+        return Promise.resolve({keys:keys, prefix:prefix, shared:shared});
+      }
+      return __db.ref("data").get().then(function(snap){
+        var all = snap.exists() ? snap.val() : {};
+        var keys = Object.keys(all).map(__decodeKey).filter(function(k){ return k.indexOf(prefix||"")===0; });
+        return {keys:keys, prefix:prefix, shared:shared};
+      });
+    }
+  };
+</script>
 </head>
 <body>
 <style>
