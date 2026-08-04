@@ -261,9 +261,9 @@
                       {label:"Depart AAMU",offset:20},{label:"Arrive Huntsville Place",offset:40},{label:"Depart Huntsville Place",offset:45},{label:"Arrive Elroy",offset:50},{label:"Depart Elroy",offset:55},{label:"Arrive AAMU",offset:75}]}},
     east_night:   {label:"East Night: Dean/Water/Constellation", category:"Night", stops:["Dean","Waterleaf","Constellation"], schedule:{startHour:18, endHour:22, legs:[
                       {label:"Depart AAMU",offset:20},{label:"Arrive Dean",offset:30},{label:"Depart Dean",offset:35},{label:"Arrive Waterleaf",offset:40},{label:"Depart Waterleaf",offset:45},{label:"Arrive Constellation",offset:55},{label:"Depart Constellation",offset:60},{label:"Arrive AAMU",offset:70}]}},
-    west_weekend: {label:"West Wknd/Holiday: HSV PL & Elroy", category:"Weekend/Holiday", stops:["Huntsville Place","Elroy"], schedule:{startHour:8, endHour:18, legs:[
+    west_weekend: {label:"West Wknd/Holiday: HSV PL & Elroy", category:"Weekend/Holiday", stops:["Huntsville Place","Elroy"], schedule:{startHour:8, endHour:18, runHours:[8,11,14,16,18], legs:[
                       {label:"Depart AAMU",offset:20},{label:"Arrive Huntsville Place",offset:40},{label:"Depart Huntsville Place",offset:45},{label:"Arrive Elroy",offset:50},{label:"Depart Elroy",offset:55},{label:"Arrive AAMU",offset:75}]}},
-    east_weekend: {label:"East Wknd/Holiday: Dean/Water/Constellation", category:"Weekend/Holiday", stops:["Constellation","Waterleaf","Dean"], schedule:{startHour:8, endHour:18, legs:[
+    east_weekend: {label:"East Wknd/Holiday: Dean/Water/Constellation", category:"Weekend/Holiday", stops:["Constellation","Waterleaf","Dean"], schedule:{startHour:8, endHour:18, runHours:[8,11,14,16,18], legs:[
                       {label:"Depart AAMU",offset:20},{label:"Arrive Constellation",offset:30},{label:"Depart Constellation",offset:35},{label:"Arrive Waterleaf",offset:45},{label:"Depart Waterleaf",offset:50},{label:"Arrive Dean",offset:60},{label:"Depart Dean",offset:65},{label:"Arrive AAMU",offset:75}]}}
   };
   const ROUTE_CATEGORIES = ["Day","Night","Weekend/Holiday"];
@@ -296,16 +296,26 @@
     let h12 = h % 12; if(h12===0) h12 = 12;
     return h12+":"+String(m).padStart(2,"0")+" "+ap;
   }
-  // Next scheduled AAMU departure for a route, based on its own start/end hours and
-  // hourly minute-offset (e.g. Dean departs :20 past every hour, 7am-6pm).
+  // Which top-of-hour "runs" exist for a route today: either an explicit fixed list
+  // (e.g. weekend/holiday: only 8, 11, 2pm, 4pm, 6pm) or every hour in a start/end range.
+  function scheduleRunHours(sch){
+    if(sch.runHours) return sch.runHours.slice();
+    const departMin = sch.legs[0].offset;
+    const hours = [];
+    for(let hour = sch.startHour; hour <= sch.endHour; hour++){
+      if(hour*60 + departMin > sch.endHour*60) break;
+      hours.push(hour);
+    }
+    return hours;
+  }
+  // Next scheduled AAMU departure for a route, based on its own schedule.
   function nextScheduledRun(routeKey){
     const sch = ROUTES[routeKey] && ROUTES[routeKey].schedule;
     if(!sch) return null;
     const departMin = sch.legs[0].offset;
     const nowMin = nowMinutes();
-    for(let hour = sch.startHour; hour <= sch.endHour; hour++){
+    for(const hour of scheduleRunHours(sch)){
       const cand = hour*60 + departMin;
-      if(cand > sch.endHour*60) break;
       if(cand >= nowMin) return fmtClock(cand);
     }
     return "No more runs today";
@@ -318,25 +328,18 @@
     const departMin = sch.legs[0].offset;
     const nowMin = nowMinutes();
     let best = null, bestDiff = Infinity;
-    for(let hour = sch.startHour; hour <= sch.endHour; hour++){
+    for(const hour of scheduleRunHours(sch)){
       const cand = hour*60 + departMin;
-      if(cand > sch.endHour*60) break;
       const diff = Math.abs(cand-nowMin);
       if(diff < bestDiff){ bestDiff = diff; best = cand; }
     }
     return best===null ? null : fmtClock(best);
   }
-  // Full timetable for a route: one row per scheduled hourly run, one column per leg.
+  // Full timetable for a route: one row per scheduled run, one column per leg.
   function fullScheduleHtml(routeKey){
     const sch = ROUTES[routeKey] && ROUTES[routeKey].schedule;
     if(!sch) return '<div class="empty-note">No schedule available.</div>';
-    const departMin = sch.legs[0].offset;
-    const rows = [];
-    for(let hour = sch.startHour; hour <= sch.endHour; hour++){
-      const depart = hour*60 + departMin;
-      if(depart > sch.endHour*60) break;
-      rows.push(sch.legs.map(leg => fmtClock(hour*60 + leg.offset)));
-    }
+    const rows = scheduleRunHours(sch).map(hour => sch.legs.map(leg => fmtClock(hour*60 + leg.offset)));
     const header = sch.legs.map(leg=>`<th>${leg.label}</th>`).join("");
     const body = rows.map(r=>`<tr>${r.map(t=>`<td>${t}</td>`).join("")}</tr>`).join("");
     return `<table class="feed"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
