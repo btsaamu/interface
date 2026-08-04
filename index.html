@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bulldog Transit System - Driver Log (DEBUG)</title>
+<title>Bulldog Transit System - Driver Log</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
@@ -126,7 +128,7 @@
   .bts-switch:hover{background:rgba(201,162,39,0.15);}
   .pending-pill{background:var(--warn-orange);color:white;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:0.03em;}
   .bts-wrap{max-width:720px;margin:0 auto;padding:16px;}
-  .bts-wrap.wide{max-width:1080px;}
+  .bts-wrap.wide{max-width:1400px;}
   .role-pick{display:flex;flex-direction:column;gap:14px;padding:40px 20px;max-width:420px;margin:0 auto;}
   .role-btn{background:white;border:2px solid var(--line);border-radius:12px;padding:22px;text-align:left;cursor:pointer;transition:border-color .15s, transform .15s;}
   .role-btn:hover{border-color:var(--maroon);transform:translateY(-1px);}
@@ -188,6 +190,28 @@
   .totals-num{font-size:20px;font-weight:800;color:var(--ink);font-family:ui-monospace,monospace;}
   .totals-num-alert{color:var(--alert-red);}
   .totals-lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.03em;margin-top:2px;}
+  .dispatch-today-grid{display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start;}
+  .dispatch-sidebar{display:flex;flex-direction:column;gap:12px;}
+  .dispatch-routes{display:flex;flex-direction:column;}
+  .route-row-label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin:0 0 6px;}
+  .route-row-grid{display:grid;gap:10px;margin-bottom:14px;}
+  .route-row-grid-3{grid-template-columns:repeat(3,1fr);}
+  .route-row-grid-2{grid-template-columns:repeat(2,1fr);}
+  .route-box{background:white;border:1px solid var(--line);border-radius:10px;padding:12px;position:relative;}
+  .route-box-overflow{background:#FCEAE6;border-color:var(--alert-red);}
+  .route-box-badge{position:absolute;top:10px;right:10px;background:var(--alert-red);color:white;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;}
+  .route-box-title{font-size:13px;font-weight:800;color:var(--maroon);}
+  .route-box-driver{font-size:13px;font-weight:800;color:var(--ink);}
+  .route-box-total{font-size:11px;color:var(--muted);}
+  .route-box-total-alert{color:var(--alert-red);font-weight:800;}
+  .route-box-feed{border-top:1px solid var(--line);margin-top:8px;padding-top:8px;font-size:11px;color:var(--muted);}
+  .route-box-overflow .route-box-feed{border-top-color:var(--alert-red);color:#993C1D;}
+  .route-box-empty{color:var(--muted);}
+  .route-box-expand{color:var(--maroon);font-weight:800;margin-top:2px;cursor:pointer;}
+  @media (max-width: 800px){
+    .dispatch-today-grid{grid-template-columns:1fr;}
+    .route-row-grid-3{grid-template-columns:repeat(2,1fr);}
+  }
   td.total-cell{font-size:16px;font-weight:800;color:var(--maroon);}
   td.total-cell.total-pending{color:var(--muted);font-weight:700;}
   .totals-note{font-size:10.5px;color:var(--muted);margin:4px 0 12px;}
@@ -523,7 +547,7 @@
     selectedRouteChoice:null, pretripAnswers:{}, pretripPhoto:null, pretripFuel:null, posttripFuel:null, postTripAnswers:{}, shiftRecord:null,
     stopPhase:'arriving', pendingStop:null, divertedName:'',
     pendingIds:new Set(), changingRoute:false,
-    dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null,
+    dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(),
     day:{trips:[]}, lastKnownDay:{trips:[]}, pollHandle:null, flushHandle:null
   };
   state.flushHandle = setInterval(flushPending, 8000);
@@ -1371,11 +1395,91 @@
   }
 
   // ================= DISPATCH VIEW =================
+  // ================= LIVE BUS MAP (Passio Go) =================
+  // Reverse-engineered from AAMU's public Passio Go map (aamu.passiogo.com) via DevTools —
+  // unofficial, not a documented Passio API, so it could break if Passio changes their site.
+  const PASSIO_SYSTEM_ID = 2456; // Alabama A&M University
+  const AAMU_CENTER = {lat: 34.7826551, lng: -86.5687131};
+  let busMapInstance = null;
+  let busMapMarkers = [];
+  let busMapPollHandle = null;
+  function passioDeviceId(){
+    if(!state.passioDeviceId) state.passioDeviceId = String(Math.floor(10000000 + Math.random()*89999999));
+    return state.passioDeviceId;
+  }
+  async function fetchPassioBuses(){
+    const url = `https://passiogo.com/mapGetData.php?getBuses=2&deviceId=${passioDeviceId()}`;
+    const body = new URLSearchParams({systemId: String(PASSIO_SYSTEM_ID), s0: String(PASSIO_SYSTEM_ID), lat: String(AAMU_CENTER.lat), lng: String(AAMU_CENTER.lng)});
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
+      body: body.toString()
+    });
+    if(!res.ok) throw new Error("Passio request failed: "+res.status);
+    const data = await res.json();
+    console.log("[Passio] raw response", data);
+    return data;
+  }
+  // The buses payload nests as {routeId: [{busId: [lat, lng, ...fields]}, ...]}. This walks it
+  // generically and pulls out any bus entry with lat/lng, since the exact field order for a
+  // live (non-empty) response hasn't been confirmed yet — check the console log above to refine.
+  function parsePassioBuses(data){
+    const out = [];
+    const busesObj = data && data.buses;
+    if(!busesObj) return out;
+    Object.keys(busesObj).forEach(routeId=>{
+      const arr = busesObj[routeId];
+      if(!Array.isArray(arr)) return;
+      arr.forEach(busEntry=>{
+        Object.keys(busEntry||{}).forEach(busId=>{
+          const fields = busEntry[busId];
+          if(!Array.isArray(fields) || fields.length < 2) return;
+          const lat = parseFloat(fields[0]), lng = parseFloat(fields[1]);
+          if(!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0){
+            out.push({routeId, busId, lat, lng});
+          }
+        });
+      });
+    });
+    return out;
+  }
+  async function initBusMap(){
+    if(!busMapInstance){
+      busMapInstance = L.map("bus-map").setView([AAMU_CENTER.lat, AAMU_CENTER.lng], 14);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors", maxZoom: 19
+      }).addTo(busMapInstance);
+      setTimeout(()=>busMapInstance.invalidateSize(), 200);
+    }
+    await refreshBusMap();
+    if(busMapPollHandle) clearInterval(busMapPollHandle);
+    busMapPollHandle = setInterval(refreshBusMap, 10000);
+  }
+  async function refreshBusMap(){
+    const statusEl = document.getElementById("map-status");
+    try{
+      const data = await fetchPassioBuses();
+      const buses = parsePassioBuses(data);
+      busMapMarkers.forEach(m=>busMapInstance.removeLayer(m));
+      busMapMarkers = buses.map(b=>{
+        return L.circleMarker([b.lat, b.lng], {radius:8, color:"#7A1F2B", fillColor:"#C9A227", fillOpacity:1, weight:2})
+          .bindPopup(`Route ${b.routeId} &middot; Bus ${b.busId}`)
+          .addTo(busMapInstance);
+      });
+      if(statusEl) statusEl.textContent = buses.length ? `${buses.length} vehicle(s) live` : "No active vehicles right now";
+    }catch(err){
+      console.error("[Passio] fetch failed", err);
+      if(statusEl) statusEl.textContent = "Couldn't reach Passio Go — see console for details";
+    }
+  }
+
   async function refreshDispatch(){
     const res = await loadDayForWrite();
     if(res.ok){ state.day = res.data; state.lastKnownDay = res.data; }
     else { state.day = state.lastKnownDay; }
     const issues = await loadVehicleIssues();
+    state.lastIssues = issues;
+    if(state.dispatchTab === 'map' && busMapInstance) return; // don't tear down the live map's DOM every 5s
     renderDispatch(issues);
   }
 
@@ -1429,6 +1533,65 @@
       }
     });
     return exceptions;
+  }
+
+  const ROUTE_BOX_LABEL = {
+    dean:"Dean", waterleaf:"Waterleaf", combo:"C/W/D", huntsville:"HSV PL",
+    elroy1:"Elroy 1", elroy2:"Elroy 2",
+    east_night:"East Night", west_night:"West Night",
+    east_weekend:"East Wknd/Holiday", west_weekend:"West Wknd/Holiday"
+  };
+  const ROUTE_BOX_ROWS = [
+    {label:"East", keys:["dean","waterleaf","combo"]},
+    {label:"West", keys:["huntsville","elroy1","elroy2"]},
+    {label:"Nights", keys:["east_night","west_night"]},
+    {label:"Weekend/Holiday", keys:["east_weekend","west_weekend"]}
+  ];
+  function computeRouteSummary(routeKey, trips){
+    const routeTrips = trips.filter(t=>t.route===routeKey);
+    let going=0, coming=0, hasOverflow=false;
+    const events = [];
+    let latestDriver = null, latestTs = null;
+    routeTrips.forEach(t=>{
+      if(t.departAAMU && t.departMeta){
+        going += t.departGoing||0; coming += t.departComing||0;
+        if(t.departOverflow && !t.departAcknowledged) hasOverflow = true;
+        events.push({ts:t.departMeta.timestamp, label:"Depart AAMU", going:t.departGoing, coming:t.departComing});
+        if(!latestTs || new Date(t.departMeta.timestamp) > new Date(latestTs)){ latestTs = t.departMeta.timestamp; latestDriver = t.driver; }
+      }
+      t.stops.forEach(s=>{
+        going += s.going||0; coming += s.coming||0;
+        if(s.overflow && !s.acknowledged) hasOverflow = true;
+        events.push({ts:s.systemTimestamp, label:s.name, going:s.going, coming:s.coming});
+        if(!latestTs || new Date(s.systemTimestamp) > new Date(latestTs)){ latestTs = s.systemTimestamp; latestDriver = t.driver; }
+      });
+    });
+    events.sort((a,b)=> new Date(b.ts) - new Date(a.ts));
+    return {driver: latestDriver, total: going+coming, hasOverflow, events};
+  }
+  function routeBoxHtml(routeKey, trips){
+    const s = computeRouteSummary(routeKey, trips);
+    const expanded = state.expandedRouteBoxes.has(routeKey);
+    const shown = expanded ? s.events : s.events.slice(0,2);
+    return `
+      <div class="route-box${s.hasOverflow?' route-box-overflow':''}">
+        ${s.hasOverflow ? '<div class="route-box-badge">Overflow</div>' : ''}
+        <div class="route-box-title">${ROUTE_BOX_LABEL[routeKey]} <span class="route-box-driver">- Driver: ${s.driver || 'none logged in'}</span></div>
+        <div class="route-box-total${s.hasOverflow?' route-box-total-alert':''}">${s.total} rider${s.total===1?'':'s'} today</div>
+        <div class="route-box-feed">
+          ${shown.length===0 ? '<div class="route-box-empty">No activity yet</div>' :
+            shown.map(e=>`<div>${fmtSysTime(e.ts)} &middot; ${fmtCounts(e.going,e.coming)||'—'}</div>`).join("")}
+          ${s.events.length>2 ? `<div class="route-box-expand" data-expand="${routeKey}">${expanded?'Show less':'Show more'}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+  function routeRowHtml(row, trips){
+    const cells = row.keys.map(k=>routeBoxHtml(k, trips)).join("");
+    return `
+      <div class="route-row-label">${row.label}</div>
+      <div class="route-row-grid route-row-grid-${row.keys.length}">${cells}</div>
+    `;
   }
 
   function buildFeedRows(trips, editable){
@@ -1544,17 +1707,28 @@
         `</span></div>`
       : `<div class="headsign"><span>ALL ROUTES NORMAL — NO OVERFLOW ALERTS</span></div>`;
 
-    const feedRows = buildFeedRows(trips, true);
-
-    const exceptions = computeExceptions(trips);
     const routeOptions = Object.keys(ROUTES).map(k=>`<option value="${k}">${routeShort(k)}</option>`).join("");
     state.lastIssues = issues;
 
     dispatchView.innerHTML = `
       ${marquee}
       <div class="tab-bar" style="display:flex;gap:8px;margin:14px 0;">
-        <button class="tab-btn ${state.dispatchTab==='live'?'active':''}" id="tab-live-btn">Live Feed</button>
+        <button class="tab-btn ${state.dispatchTab==='live'?'active':''}" id="tab-live-btn">Today</button>
         <button class="tab-btn ${state.dispatchTab==='search'?'active':''}" id="tab-search-btn">Search Log Sheets</button>
+        <button class="tab-btn ${state.dispatchTab==='map'?'active':''}" id="tab-map-btn">GPS</button>
+      </div>
+
+      <div id="pane-map" style="display:${state.dispatchTab==='map'?'block':'none'};">
+        <div class="card">
+          <div class="card-label">Live Bus Map <span class="mono" id="map-status">Loading…</span></div>
+          <div id="bus-map" style="height:420px;border-radius:10px;overflow:hidden;border:1px solid var(--line);"></div>
+          <div class="disclosure" style="margin-top:10px;">Pulled directly from Passio Go's live data feed. If no vehicles are running (e.g. school break), the map will just show no markers — that's expected, not an error.</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Traffic</div>
+          <a href="https://algotraffic.com/map" target="_blank" rel="noopener" class="btn btn-outline" style="display:inline-block;text-decoration:none;width:auto;">Open ALGO Traffic (ALDOT)</a>
+          <div class="disclosure" style="margin-top:10px;">Opens Alabama DOT's live traffic camera and incident map in a new tab.</div>
+        </div>
       </div>
 
       <div id="pane-search" style="display:${state.dispatchTab==='search'?'block':'none'};">
@@ -1575,43 +1749,49 @@
       </div>
 
       <div id="pane-live" style="display:${state.dispatchTab==='live'?'block':'none'};">
-        <div class="stat-grid">
-          <div class="stat-box"><div class="num">${trips.length}</div><div class="lbl">Trips Today</div></div>
-          <div class="stat-box"><div class="num">${going}</div><div class="lbl">Going to APT</div></div>
-          <div class="stat-box"><div class="num">${coming}</div><div class="lbl">Coming to AAMU</div></div>
-          <div class="stat-box"><div class="num">${leftBehind}</div><div class="lbl">Left Behind</div></div>
-          <div class="stat-box"><div class="num">${going+coming}</div><div class="lbl">Total Students</div></div>
-        </div>
-        <div class="card">
-          <div class="card-label">Open Overflow Alerts</div>
-          <div id="alerts-box">
-            ${openAlerts.length===0 ? '<div class="empty-note">No open alerts.</div>' :
-              openAlerts.map(a=>`
-                <div class="alert-item">
-                  <div><div class="a-txt">${a.route} — ${a.stop}: ${Math.max(a.going,a.coming)} riders (cap ${a.cap})${a.leftBehind?`, ${a.leftBehind} left behind`:''}</div>
-                  <div class="a-time">Driver ${a.driver} · logged ${a.time}</div></div>
-                  <button class="btn btn-outline btn-small" data-trip="${a.tripId}" data-stop="${a.stopIdx}">Acknowledge</button>
-                </div>
-              `).join("")}
+        <div class="mono" style="color:var(--muted);margin-bottom:10px;">${todayDisplay()}</div>
+        <div class="dispatch-today-grid">
+          <div class="dispatch-sidebar">
+            <div class="card">
+              <div class="card-label">Total Riders Today</div>
+              <div style="font-size:40px;font-weight:800;color:var(--maroon);text-align:center;">${going+coming}</div>
+            </div>
+            <div class="card">
+              <div class="card-label">Open Overflow Alerts</div>
+              <div id="alerts-box">
+                ${openAlerts.length===0 ? '<div class="empty-note">No open alerts.</div>' :
+                  openAlerts.map(a=>`
+                    <div class="alert-item">
+                      <div><div class="a-txt">${a.route} — ${a.stop}: ${Math.max(a.going,a.coming)} riders (cap ${a.cap})${a.leftBehind?`, ${a.leftBehind} left behind`:''}</div>
+                      <div class="a-time">Driver ${a.driver} · logged ${a.time}</div></div>
+                      <button class="btn btn-outline btn-small" data-trip="${a.tripId}" data-stop="${a.stopIdx}">Acknowledge</button>
+                    </div>
+                  `).join("")}
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-label">Vehicle Inspection Issues</div>
+              ${issues.length===0 ? '<div class="empty-note">No issues reported today.</div>' : issues.map(i=>`<div class="issue-item">${i.phase} — ${i.driver}: ${i.item}${i.note?` — "${i.note}"`:''}</div>`).join("")}
+            </div>
           </div>
-        </div>
-        <div class="card">
-          <div class="card-label">Vehicle Inspection Issues</div>
-          ${issues.length===0 ? '<div class="empty-note">No issues reported today.</div>' : issues.map(i=>`<div class="issue-item">${i.phase} — ${i.driver}: ${i.item}${i.note?` — "${i.note}"`:''}</div>`).join("")}
-        </div>
-        <div class="card">
-          <div class="card-label">Exceptions</div>
-          ${exceptions.length===0 ? '<div class="empty-note">No exceptions detected.</div>' : exceptions.map(e=>`<div class="exception-item">${e}</div>`).join("")}
-        </div>
-        <div class="card">
-          <div class="card-label">Live Stop Feed</div>
-          ${feedTableHtml(feedRows, "No stops logged yet today.")}
+          <div class="dispatch-routes">
+            ${ROUTE_BOX_ROWS.map(row=>routeRowHtml(row, trips)).join("")}
+          </div>
         </div>
       </div>
     `;
 
-    document.getElementById("tab-live-btn").onclick = () => { state.dispatchTab = 'live'; renderDispatch(state.lastIssues); };
-    document.getElementById("tab-search-btn").onclick = () => { state.dispatchTab = 'search'; renderDispatch(state.lastIssues); };
+    document.querySelectorAll("[data-expand]").forEach(el=>{
+      el.onclick = () => {
+        const k = el.dataset.expand;
+        if(state.expandedRouteBoxes.has(k)) state.expandedRouteBoxes.delete(k); else state.expandedRouteBoxes.add(k);
+        renderDispatch(state.lastIssues);
+      };
+    });
+    document.getElementById("tab-live-btn").onclick = () => { if(busMapPollHandle) clearInterval(busMapPollHandle); busMapInstance = null; busMapMarkers = []; state.dispatchTab = 'live'; renderDispatch(state.lastIssues); };
+    document.getElementById("tab-search-btn").onclick = () => { if(busMapPollHandle) clearInterval(busMapPollHandle); busMapInstance = null; busMapMarkers = []; state.dispatchTab = 'search'; renderDispatch(state.lastIssues); };
+    document.getElementById("tab-map-btn").onclick = () => { state.dispatchTab = 'map'; renderDispatch(state.lastIssues); };
+    if(state.dispatchTab === 'map') initBusMap();
     document.getElementById("search-btn").onclick = runLogSearch;
 
     dispatchView.querySelectorAll("[data-trip]").forEach(btn=>{
