@@ -206,6 +206,10 @@
   .route-box-total-alert{color:var(--alert-red);font-weight:800;}
   .route-box-feed{border-top:1px solid var(--line);margin-top:8px;padding-top:8px;font-size:11px;color:var(--muted);}
   .route-box-overflow .route-box-feed{border-top-color:var(--alert-red);color:#993C1D;}
+  .route-box-feed-entry{padding:4px 0;border-bottom:1px dashed var(--line);}
+  .route-box-feed-entry:last-of-type{border-bottom:none;}
+  .route-box-overflow .route-box-feed-entry{border-bottom-color:var(--alert-red);}
+  .route-box-feed-time{font-weight:800;}
   .route-box-empty{color:var(--muted);}
   .route-box-expand{color:var(--maroon);font-weight:800;margin-top:2px;cursor:pointer;}
   @media (max-width: 800px){
@@ -1556,13 +1560,15 @@
       if(t.departAAMU && t.departMeta){
         going += t.departGoing||0; coming += t.departComing||0;
         if(t.departOverflow && !t.departAcknowledged) hasOverflow = true;
-        events.push({ts:t.departMeta.timestamp, label:"Depart AAMU", going:t.departGoing, coming:t.departComing});
+        events.push({ts:t.departMeta.timestamp, time:t.departAAMU, location:"Depart AAMU", going:t.departGoing, coming:t.departComing});
         if(!latestTs || new Date(t.departMeta.timestamp) > new Date(latestTs)){ latestTs = t.departMeta.timestamp; latestDriver = t.driver; }
       }
       t.stops.forEach(s=>{
         going += s.going||0; coming += s.coming||0;
         if(s.overflow && !s.acknowledged) hasOverflow = true;
-        events.push({ts:s.systemTimestamp, label:s.name, going:s.going, coming:s.coming});
+        if(s.depart){
+          events.push({ts:s.systemTimestamp, time:s.depart, location:s.name, going:s.going, coming:s.coming});
+        }
         if(!latestTs || new Date(s.systemTimestamp) > new Date(latestTs)){ latestTs = s.systemTimestamp; latestDriver = t.driver; }
       });
     });
@@ -1580,7 +1586,13 @@
         <div class="route-box-total${s.hasOverflow?' route-box-total-alert':''}">${s.total} rider${s.total===1?'':'s'} today</div>
         <div class="route-box-feed">
           ${shown.length===0 ? '<div class="route-box-empty">No activity yet</div>' :
-            shown.map(e=>`<div>${fmtSysTime(e.ts)} &middot; ${fmtCounts(e.going,e.coming)||'—'}</div>`).join("")}
+            shown.map(e=>`
+              <div class="route-box-feed-entry">
+                <div class="route-box-feed-time">${e.time}</div>
+                <div>${e.location}</div>
+                <div>${fmtCounts(e.going,e.coming)||'—'}</div>
+              </div>
+            `).join("")}
           ${s.events.length>2 ? `<div class="route-box-expand" data-expand="${routeKey}">${expanded?'Show less':'Show more'}</div>` : ''}
         </div>
       </div>
