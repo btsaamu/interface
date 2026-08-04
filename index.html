@@ -182,6 +182,27 @@
   .info-row:last-of-type{border-bottom:none;}
 
   .log-entry{border-bottom:1px solid var(--line);padding:8px 0;font-size:13px;}
+  .grid-route-label{font-size:12px;color:var(--muted);margin:10px 0 6px;font-weight:800;text-transform:uppercase;letter-spacing:0.03em;}
+  .totals-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .totals-cell{text-align:center;}
+  .totals-num{font-size:20px;font-weight:800;color:var(--ink);font-family:ui-monospace,monospace;}
+  .totals-num-alert{color:var(--alert-red);}
+  .totals-lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.03em;margin-top:2px;}
+  td.total-cell{font-size:16px;font-weight:800;color:var(--maroon);}
+  td.total-cell.total-pending{color:var(--muted);font-weight:700;}
+  .totals-note{font-size:10.5px;color:var(--muted);margin:4px 0 12px;}
+  .grid-route-label:first-child{margin-top:0;}
+  table.log-grid{border-collapse:collapse;background:white;border-radius:10px;overflow:hidden;border:1px solid var(--line);min-width:100%;margin-bottom:12px;}
+  table.log-grid th{background:var(--maroon);color:var(--gold-light);padding:8px 10px;text-align:left;font-size:11px;font-weight:700;white-space:nowrap;}
+  table.log-grid td{padding:8px 10px;font-size:12px;color:var(--ink);vertical-align:top;border-bottom:1px solid var(--line);white-space:nowrap;}
+  table.log-grid tr:last-child td{border-bottom:none;}
+  table.log-grid .grid-time{font-weight:700;}
+  table.log-grid .grid-count{font-size:10.5px;color:var(--muted);margin-top:2px;}
+  table.log-grid td.overflow-cell{background:#FCEAE6;}
+  table.log-grid td.overflow-cell .grid-time{color:var(--alert-red);}
+  table.log-grid td.overflow-cell .grid-count{color:var(--alert-red);}
+  table.log-grid td.pending-cell{color:var(--muted);}
+  table.log-grid td.tripnum-cell{font-weight:800;}
   .log-entry:last-child{border-bottom:none;}
   .log-entry.overflow{background:#FCEAE6;}
 
@@ -196,6 +217,9 @@
   .pt-explain{width:100%;margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:13px;}
   .pt-item.pt-error{border:2px solid var(--alert-red);border-radius:8px;padding:10px;background:#FCEAE6;}
   .pt-error-field{border:2px solid var(--alert-red) !important;background:#FCEAE6 !important;}
+  .fuel-chip-row{display:flex;gap:6px;flex-wrap:wrap;border-radius:8px;padding:2px;}
+  .fuel-chip{flex:1;min-width:52px;text-align:center;padding:10px 6px;border:2px solid var(--line);border-radius:8px;background:white;font-weight:800;font-size:13px;cursor:pointer;color:var(--ink);}
+  .fuel-chip.active{background:var(--maroon);border-color:var(--maroon);color:var(--gold-light);}
 
   .exception-item{background:#FBF1E6;border:1px solid var(--warn-orange);border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:12.5px;color:var(--warn-orange);font-weight:600;}
   .issue-item{background:#FCEAE6;border:1px solid var(--alert-red);border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:12.5px;color:var(--alert-red);font-weight:600;}
@@ -308,6 +332,19 @@
     }
     return hours;
   }
+  // Is right now closest to the LAST scheduled run of a fixed-hours (weekend/holiday) route?
+  function isFinalScheduledRun(routeKey){
+    const sch = ROUTES[routeKey] && ROUTES[routeKey].schedule;
+    if(!sch || !sch.runHours) return false;
+    const departMin = sch.legs[0].offset;
+    const nowMin = nowMinutes();
+    let best = null, bestDiff = Infinity;
+    scheduleRunHours(sch).forEach(hour=>{
+      const diff = Math.abs(hour*60+departMin - nowMin);
+      if(diff < bestDiff){ bestDiff = diff; best = hour; }
+    });
+    return best === sch.runHours[sch.runHours.length-1];
+  }
   // Next scheduled AAMU departure for a route, based on its own schedule.
   function nextScheduledRun(routeKey){
     const sch = ROUTES[routeKey] && ROUTES[routeKey].schedule;
@@ -369,6 +406,21 @@
     "Did you notice any issues with the doors or windows?",
     "Did any damage occur to this vehicle during your shift?"
   ];
+  const FUEL_LEVELS = ["Full","3/4","1/2","1/4","E"];
+  function fuelChipsHtml(id, selected){
+    return `<div class="fuel-chip-row" id="${id}">${FUEL_LEVELS.map(f=>`<div class="fuel-chip${selected===f?' active':''}" data-fuel="${f}">${f}</div>`).join("")}</div>`;
+  }
+  function wireFuelChips(containerId, onSelect){
+    const box = document.getElementById(containerId);
+    box.querySelectorAll(".fuel-chip").forEach(chip=>{
+      chip.onclick = () => {
+        box.querySelectorAll(".fuel-chip").forEach(c=>c.classList.remove("active"));
+        chip.classList.add("active");
+        box.classList.remove("pt-error-field");
+        onSelect(chip.dataset.fuel);
+      };
+    });
+  }
 
   function todayKey(){
     const d = new Date();
@@ -468,7 +520,7 @@
   let state = {
     role:null, driverProfile:{}, driverLock:{status:'locked', name:'', vehicle:''},
     myTrip:null, myCompletedTrips:[], shiftRoute:null, shiftVehicle:null, shiftCapacity:null,
-    selectedRouteChoice:null, pretripAnswers:{}, pretripPhoto:null, postTripAnswers:{}, shiftRecord:null,
+    selectedRouteChoice:null, pretripAnswers:{}, pretripPhoto:null, pretripFuel:null, posttripFuel:null, postTripAnswers:{}, shiftRecord:null,
     stopPhase:'arriving', pendingStop:null, divertedName:'',
     pendingIds:new Set(), changingRoute:false,
     dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null,
@@ -602,7 +654,7 @@
       state.shiftCapacity = cs0.pretrip.capacity;
       state.selectedRouteChoice = cs0.pretrip.route;
     }
-    state.pretripAnswers = {}; state.pretripPhoto = null; state.postTripAnswers = {};
+    state.pretripAnswers = {}; state.pretripPhoto = null; state.pretripFuel = null; state.posttripFuel = null; state.postTripAnswers = {};
     await renderDriverHome();
   }
 
@@ -640,9 +692,14 @@
         <div class="card-label">Pre-Trip Inspection</div>
         ${already
           ? `<div class="disclosure">✓ Pre-trip completed today at ${fmtSysTime(currentShift().pretrip.completedAt)}${currentShift().pretrip.checklist.some(c=>c.status==='bad')?' — issue(s) were reported.':''}</div>
-             <div class="info-row"><span>Starting Mileage</span><strong>${currentShift().pretrip.startingMileage||'—'}</strong></div>`
+             <div class="info-row"><span>Starting Mileage</span><strong>${currentShift().pretrip.startingMileage||'—'}</strong></div>
+             <div class="info-row"><span>Starting Fuel</span><strong>${currentShift().pretrip.startingFuel||'—'}</strong></div>`
           : `<div class="field-row">
                <div class="field"><label>Starting Mileage</label><input id="pt-mileage" type="number" min="0" placeholder="Odometer reading"></div>
+             </div>
+             <div class="pt-item">
+               <div class="pt-item-label">Starting Fuel Level</div>
+               ${fuelChipsHtml("pt-fuel-chips", state.pretripFuel)}
              </div>
              <div id="pretrip-items"></div>
              <div class="pt-item">
@@ -702,6 +759,7 @@
         inp.oninput = () => { if(inp.value.trim()) inp.closest(".pt-item").classList.remove("pt-error"); };
       });
       document.getElementById("pt-mileage").oninput = (e) => { if(e.target.value.trim()) e.target.classList.remove("pt-error-field"); };
+      wireFuelChips("pt-fuel-chips", f => { state.pretripFuel = f; });
       document.getElementById("pt-photo").onchange = (e) => {
         const file = e.target.files[0]; if(!file) return;
         const reader = new FileReader();
@@ -740,6 +798,9 @@
       const mileage = mileageInput.value.trim();
       if(!mileage){ mileageInput.classList.add("pt-error-field"); firstError = firstError || mileageInput; }
 
+      const fuelBox = document.getElementById("pt-fuel-chips");
+      if(!state.pretripFuel){ fuelBox.classList.add("pt-error-field"); firstError = firstError || fuelBox; }
+
       PRETRIP_ITEMS.forEach((_,i)=>{
         const itemEl = document.getElementById("ptx-explain-"+i).closest(".pt-item");
         const answered = !!state.pretripAnswers[i];
@@ -748,7 +809,7 @@
         else { itemEl.classList.remove("pt-error"); }
       });
 
-      if(!mileage || PRETRIP_ITEMS.some((_,i)=> !state.pretripAnswers[i] || (state.pretripAnswers[i]==='bad' && !document.getElementById("ptx-explain-"+i).value.trim()))){
+      if(!mileage || !state.pretripFuel || PRETRIP_ITEMS.some((_,i)=> !state.pretripAnswers[i] || (state.pretripAnswers[i]==='bad' && !document.getElementById("ptx-explain-"+i).value.trim()))){
         if(firstError) firstError.scrollIntoView({behavior:"smooth", block:"center"});
         return;
       }
@@ -761,7 +822,7 @@
     if(!already){
       const mileage = document.getElementById("pt-mileage").value.trim();
       const checklist = PRETRIP_ITEMS.map((item,i)=>({item, status:state.pretripAnswers[i], note: state.pretripAnswers[i]==='bad' ? document.getElementById("ptx-explain-"+i).value.trim() : ""}));
-      currentShift().pretrip = {done:true, route:state.selectedRouteChoice, vehicle, capacity, startingMileage:mileage, checklist, photo: state.pretripPhoto||null, completedAt:new Date().toISOString()};
+      currentShift().pretrip = {done:true, route:state.selectedRouteChoice, vehicle, capacity, startingMileage:mileage, startingFuel:state.pretripFuel, checklist, photo: state.pretripPhoto||null, completedAt:new Date().toISOString()};
       await saveShiftRecord(state.driverLock.name, state.shiftRecord);
     }
     state.shiftRoute = state.selectedRouteChoice; state.shiftVehicle = vehicle; state.shiftCapacity = capacity;
@@ -786,32 +847,83 @@
   }
 
   // ================= LOG PAGE =================
-  function activeLogSheetHtml(){
-    const entries = [];
-    [...(state.myTrip?[state.myTrip]:[]), ...state.myCompletedTrips].forEach(t=>{
-      if(t.departAAMU && t.departMeta){
-        entries.push({ts:t.departMeta.timestamp, html:`
-          <div class="log-entry ${t.departOverflow?'overflow':''}">
-            <div><strong>Depart AAMU</strong> ${t.departOverflow?'<span class="tag over">Overflow</span>':''}</div>
-            <div class="mono">${t.departAAMU} · Going ${t.departGoing||0} · Coming ${t.departComing||0}${t.departLeftBehind?` · Left behind ${t.departLeftBehind}`:''}</div>
-          </div>
-        `});
-      }
-      t.stops.forEach(s=>{
-        entries.push({ts:s.systemTimestamp, html:`
-          <div class="log-entry ${s.overflow?'overflow':''}">
-            <div><strong>${s.name}</strong>${s.diverted?' <span class="tag edited">Diverted</span>':''} ${s.overflow?'<span class="tag over">Overflow</span>':''} ${s.acknowledged?'<span class="tag ack">✓ Seen</span>':''}</div>
-            <div class="mono">Arr ${s.arrive} · Dep ${s.depart||'—'} · Going ${s.going} · Coming ${s.coming}${s.leftBehind?` · Left behind ${s.leftBehind}`:''}</div>
-          </div>
-        `});
+  function fmtCounts(going, coming, leftBehind){
+    const parts = [];
+    if(going) parts.push(`Going ${going}`);
+    if(coming) parts.push(`Coming ${coming}`);
+    if(leftBehind) parts.push(`Left behind ${leftBehind}`);
+    return parts.join(" &middot; ");
+  }
+  function cellTagsHtml(overflow, acknowledged, diverted, noPassengers){
+    const tags = [];
+    if(noPassengers) tags.push('<span class="tag edited">No Pax</span>');
+    if(diverted) tags.push('<span class="tag edited">Diverted</span>');
+    if(overflow) tags.push('<span class="tag over">Overflow</span>');
+    if(acknowledged) tags.push('<span class="tag ack">&#10003; Seen</span>');
+    return tags.length ? ` ${tags.join(" ")}` : "";
+  }
+  function routeGridTableHtml(routeKey, trips){
+    const stops = ROUTES[routeKey] ? ROUTES[routeKey].stops : [];
+    const headers = ["Trip #", "Depart AAMU", ...stops, "Arrive AAMU", "Total"];
+    const headerHtml = headers.map(h=>`<th>${h}</th>`).join("");
+    const rows = trips.map(t=>{
+      const cells = [`<td class="tripnum-cell">${t.tripNum}</td>`];
+      const departCounts = fmtCounts(t.departGoing, t.departComing, t.departLeftBehind);
+      cells.push(`<td${t.departOverflow?' class="overflow-cell"':''}>${t.departAAMU?`<div class="grid-time">${t.departAAMU}</div>`:'—'}${t.departAAMU?`<div class="grid-count">${departCounts}${cellTagsHtml(t.departOverflow,t.departAcknowledged,false,t.noPassengers)}</div>`:''}</td>`);
+      let tripTotal = (t.departGoing||0) + (t.departComing||0);
+      stops.forEach((stopName,i)=>{
+        const s = t.stops[i];
+        if(s){
+          tripTotal += (s.going||0) + (s.coming||0);
+          const stopCounts = fmtCounts(s.going, s.coming, s.leftBehind);
+          cells.push(`<td${s.overflow?' class="overflow-cell"':''}>
+            <div class="grid-time">Arr ${s.arrive}</div>
+            ${s.depart?`<div class="grid-time">Dep ${s.depart}</div>`:''}
+            <div class="grid-count">${stopCounts}${cellTagsHtml(s.overflow,s.acknowledged,s.diverted,false)}</div>
+          </td>`);
+        } else {
+          cells.push('<td class="pending-cell">—</td>');
+        }
       });
-      if(t.arriveAAMU && t.arriveMeta){
-        entries.push({ts:t.arriveMeta.timestamp, html:`<div class="log-entry"><div><strong>Arrive AAMU</strong></div><div class="mono">${t.arriveAAMU}</div></div>`});
-      }
+      cells.push(`<td>${t.arriveAAMU || '—'}</td>`);
+      cells.push(`<td class="total-cell${t.complete?'':' total-pending'}">${tripTotal}${t.complete?'':'*'}</td>`);
+      return `<tr>${cells.join("")}</tr>`;
+    }).join("");
+    return `
+      <div class="grid-route-label">${routeShort(routeKey)}</div>
+      <div style="overflow-x:auto;">
+        <table class="log-grid"><thead><tr>${headerHtml}</tr></thead><tbody>${rows}</tbody></table>
+      </div>
+      <div class="totals-note">* Trip still in progress — total will keep climbing until it's complete.</div>
+    `;
+  }
+  function routeTotalsHtml(routeKey){
+    const allTrips = [...(state.myTrip?[state.myTrip]:[]), ...state.myCompletedTrips].filter(t=>t.route===routeKey);
+    let going=0, coming=0, leftBehind=0;
+    allTrips.forEach(t=>{
+      going += t.departGoing||0; coming += t.departComing||0; leftBehind += t.departLeftBehind||0;
+      t.stops.forEach(s=>{ going += s.going||0; coming += s.coming||0; leftBehind += s.leftBehind||0; });
     });
-    entries.sort((a,b)=> new Date(b.ts) - new Date(a.ts));
-    if(entries.length===0) return '<div class="empty-note">No stops logged yet.</div>';
-    return entries.map(e=>e.html).join("");
+    return `
+      <div class="totals-grid">
+        <div class="totals-cell"><div class="totals-num">${going}</div><div class="totals-lbl">Going</div></div>
+        <div class="totals-cell"><div class="totals-num">${coming}</div><div class="totals-lbl">Coming</div></div>
+        <div class="totals-cell"><div class="totals-num">${going+coming}</div><div class="totals-lbl">Total</div></div>
+        <div class="totals-cell"><div class="totals-num${leftBehind?' totals-num-alert':''}">${leftBehind}</div><div class="totals-lbl">Left behind</div></div>
+      </div>
+    `;
+  }
+  function activeLogSheetHtml(){
+    const allTrips = [...(state.myTrip?[state.myTrip]:[]), ...state.myCompletedTrips];
+    if(allTrips.length===0) return '<div class="empty-note">No trips logged yet.</div>';
+    const routeOrder = [];
+    allTrips.slice().sort((a,b)=>b.tripNum-a.tripNum).forEach(t=>{
+      if(!routeOrder.includes(t.route)) routeOrder.push(t.route);
+    });
+    return routeOrder.map(routeKey=>{
+      const tripsForRoute = allTrips.filter(t=>t.route===routeKey).sort((a,b)=>b.tripNum-a.tripNum);
+      return routeGridTableHtml(routeKey, tripsForRoute);
+    }).join("");
   }
 
   function renderLogPage(){
@@ -862,7 +974,11 @@
           ${state.showFullSchedule ? fullScheduleHtml(trip.route) : ''}
         </div>
       </div>
-      ${renderStopPhaseCard(defaultStopName)}
+      ${renderStopPhaseCard(trip, defaultStopName)}
+      <div class="card">
+        <div class="card-label">Today's Totals &middot; ${routeShort(trip.route)}</div>
+        ${routeTotalsHtml(trip.route)}
+      </div>
       <div class="card">
         <div class="card-label">Active Log Sheet</div>
         ${activeLogSheetHtml()}
@@ -876,8 +992,10 @@
     wireStopPhase(trip, defaultStopName, cap, route);
   }
 
-  function renderStopPhaseCard(defaultStopName){
+  function renderStopPhaseCard(trip, defaultStopName){
     if(state.stopPhase === 'depart_campus'){
+      const isWeekendHoliday = ROUTES[trip.route].category === "Weekend/Holiday";
+      const showNoPax = isWeekendHoliday && isFinalScheduledRun(trip.route);
       return `
         <div class="card">
           <div class="card-label">Departing AAMU</div>
@@ -905,6 +1023,7 @@
             </div>
           </div>
           <button class="btn btn-primary big-log-btn" id="log-campus-depart-btn">LOG DEPARTURE &amp; CONTINUE</button>
+          ${showNoPax ? `<button class="btn btn-outline big-log-btn" id="no-passengers-btn" style="margin-top:8px;">NO PASSENGERS — NOT LEAVING CAMPUS</button>` : ''}
         </div>
       `;
     }
@@ -1019,6 +1138,24 @@
         state.stopPhase = 'arriving';
         renderLogPage();
       };
+      const noPassBtn = document.getElementById("no-passengers-btn");
+      if(noPassBtn){
+        noPassBtn.onclick = async () => {
+          noPassBtn.disabled = true; noPassBtn.textContent = "Logging…";
+          const time = document.getElementById("campus-time-input").value;
+          const geo = await getGeo();
+          const meta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
+          trip.departAAMU = time; trip.departMeta = meta;
+          trip.departGoing = 0; trip.departComing = 0; trip.departLeftBehind = 0; trip.departOverflow = false; trip.departAcknowledged = false;
+          trip.noPassengers = true;
+          trip.arriveAAMU = time; trip.arriveMeta = meta;
+          trip.complete = true;
+          state.myCompletedTrips.push(trip);
+          state.myTrip = null;
+          await syncTrip(trip);
+          await startTripInternal();
+        };
+      }
       return;
     }
     if(state.stopPhase === 'arrive_campus'){
@@ -1145,10 +1282,15 @@
       <div class="card">
         <div class="card-label">Post-Trip Inspection</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Please answer each question before submitting.</div>
+        <div class="pt-item">
+          <div class="pt-item-label">Ending Fuel Level</div>
+          ${fuelChipsHtml("pp-fuel-chips", state.posttripFuel)}
+        </div>
         <div id="posttrip-items"></div>
         <button class="btn btn-primary big-log-btn" id="submit-posttrip-btn" style="margin-top:10px;">SUBMIT POST-TRIP</button>
       </div>
     `;
+    wireFuelChips("pp-fuel-chips", f => { state.posttripFuel = f; });
     const box = document.getElementById("posttrip-items");
     box.innerHTML = POSTTRIP_ITEMS.map((q,i)=>`
       <div class="pt-item">
@@ -1173,10 +1315,16 @@
       });
     });
     document.getElementById("submit-posttrip-btn").onclick = async () => {
-      const missing = POSTTRIP_ITEMS.some((_,i)=> !state.postTripAnswers[i]);
-      if(missing){ alert("Please answer every question before submitting."); return; }
+      const missingQuestions = POSTTRIP_ITEMS.some((_,i)=> !state.postTripAnswers[i]);
+      const missingFuel = !state.posttripFuel;
+      if(missingFuel) document.getElementById("pp-fuel-chips").classList.add("pt-error-field");
+      if(missingQuestions || missingFuel){
+        alert("Please complete every item — including fuel level — before submitting.");
+        if(missingFuel) document.getElementById("pp-fuel-chips").scrollIntoView({behavior:"smooth", block:"center"});
+        return;
+      }
       const answers = POSTTRIP_ITEMS.map((q,i)=>({question:q, answer:state.postTripAnswers[i], note: state.postTripAnswers[i]==='yes' ? (document.getElementById("pp-explain-"+i).value||"") : ""}));
-      currentShift().posttrip = {done:true, answers, completedAt:new Date().toISOString()};
+      currentShift().posttrip = {done:true, answers, endingFuel:state.posttripFuel, completedAt:new Date().toISOString()};
       await saveShiftRecord(state.driverLock.name, state.shiftRecord);
       renderDaySummaryPage();
     };
@@ -1217,7 +1365,7 @@
     state.shiftRecord.shifts.push(blankShift());
     await saveShiftRecord(state.driverLock.name, state.shiftRecord);
     state.shiftRoute = null; state.shiftVehicle = null; state.shiftCapacity = null; state.selectedRouteChoice = null;
-    state.pretripAnswers = {}; state.pretripPhoto = null; state.postTripAnswers = {};
+    state.pretripAnswers = {}; state.pretripPhoto = null; state.pretripFuel = null; state.posttripFuel = null; state.postTripAnswers = {};
     state.myTrip = null;
     await renderDriverHome();
   }
@@ -1269,6 +1417,7 @@
     const exceptions = [];
     trips.forEach(t=>{
       if(t.complete){
+        if(t.noPassengers) return;
         const expected = ROUTES[t.route].stops.length;
         if(t.stops.length < expected) exceptions.push(`Skipped stop(s): ${t.driver} — ${routeShort(t.route)} trip ${t.tripNum} ended with ${t.stops.length}/${expected} stops logged`);
       } else {
@@ -1327,7 +1476,7 @@
             <button class="link-btn danger" data-cancel-edit="1">Cancel</button>
           </div></td></tr>`);
         } else {
-          rows.push(`<tr class="${t.departOverflow?'overflow':''}"><td class="mono">${fmtSysTime(t.departMeta.timestamp)}</td><td colspan="2">Depart AAMU: ${t.departAAMU}</td><td>${routeShort(t.route)}</td><td>${t.driver}</td><td>AAMU</td><td>${t.departGoing||0}</td><td>${t.departComing||0}</td><td>${t.departLeftBehind==null?'—':t.departLeftBehind}</td><td>${t.vehicleCapacity||DEFAULT_CAPACITY}</td><td>${fmtGeo(t.departMeta.lat,t.departMeta.lng,t.departMeta.gpsError)}</td><td>${t.departOverflow?'<span class="tag over">Overflow</span>':'<span class="tag ok">OK</span>'} ${editable?`<button class="link-btn" data-edit-trip="${t.id}" data-edit-field="depart">Edit</button>`:''}</td></tr>`);
+          rows.push(`<tr class="${t.departOverflow?'overflow':''}"><td class="mono">${fmtSysTime(t.departMeta.timestamp)}</td><td colspan="2">Depart AAMU: ${t.departAAMU}${t.noPassengers?' <span class="tag edited">No Pax</span>':''}</td><td>${routeShort(t.route)}</td><td>${t.driver}</td><td>AAMU</td><td>${t.departGoing||0}</td><td>${t.departComing||0}</td><td>${t.departLeftBehind==null?'—':t.departLeftBehind}</td><td>${t.vehicleCapacity||DEFAULT_CAPACITY}</td><td>${fmtGeo(t.departMeta.lat,t.departMeta.lng,t.departMeta.gpsError)}</td><td>${t.departOverflow?'<span class="tag over">Overflow</span>':'<span class="tag ok">OK</span>'} ${editable?`<button class="link-btn" data-edit-trip="${t.id}" data-edit-field="depart">Edit</button>`:''}</td></tr>`);
         }
       }
       return rows;
