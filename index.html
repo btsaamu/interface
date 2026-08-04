@@ -158,7 +158,9 @@
   .tag.ack{background:var(--success);color:white;}
 
   .big-route-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-  .big-route-btn{padding:26px 8px;border:3px solid var(--line);border-radius:14px;background:white;text-align:center;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:0.02em;color:var(--maroon-dark);cursor:pointer;}
+  .route-cat-label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin:10px 0 6px;}
+  .route-cat-label:first-child{margin-top:0;}
+  .big-route-btn{padding:14px 8px;min-height:88px;display:flex;align-items:center;justify-content:center;line-height:1.25;border:3px solid var(--line);border-radius:14px;background:white;text-align:center;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:0.02em;color:var(--maroon-dark);cursor:pointer;}
   .big-route-btn:active{background:var(--gold-light);border-color:var(--maroon);}
   .big-route-btn.active{background:var(--gold-light);border-color:var(--maroon);color:var(--maroon-dark);}
   .landscape-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
@@ -174,6 +176,9 @@
   .big-log-btn{padding:22px;font-size:18px;margin-top:6px;}
 
   .info-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px dashed var(--line);}
+  .edit-form{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 4px;}
+  .edit-form input{padding:6px;border:1px solid var(--line);border-radius:6px;font-size:13px;width:60px;}
+  .edit-form input.wide{width:90px;}
   .info-row:last-of-type{border-bottom:none;}
 
   .log-entry{border-bottom:1px solid var(--line);padding:8px 0;font-size:13px;}
@@ -240,29 +245,101 @@
 (function(){
   const DEFAULT_CAPACITY = 14;
   const ROUTES = {
-    dean:       {label:"Dean",        stops:["Dean"]},
-    waterleaf:  {label:"Waterleaf",   stops:["Waterleaf"]},
-    combo:      {label:"Constellation/Waterleaf/Dean", stops:["Constellation","Waterleaf","Dean"]},
-    huntsville: {label:"Huntsville Place", stops:["Huntsville Place"]},
-    elroy1:     {label:"Elroy 1",      stops:["Elroy"]},
-    elroy2:     {label:"Elroy 2",      stops:["Elroy"]}
+    dean:         {label:"Dean", category:"Day", stops:["Dean"], schedule:{startHour:7, endHour:18, legs:[
+                      {label:"Depart AAMU",offset:20},{label:"Arrive Dean",offset:30},{label:"Depart Dean",offset:35},{label:"Arrive AAMU",offset:45}]}},
+    waterleaf:    {label:"Waterleaf", category:"Day", stops:["Waterleaf"], schedule:{startHour:7, endHour:18, legs:[
+                      {label:"Depart AAMU",offset:20},{label:"Arrive Waterleaf",offset:35},{label:"Depart Waterleaf",offset:40},{label:"Arrive AAMU",offset:55}]}},
+    combo:        {label:"Constellation/Waterleaf/Dean", category:"Day", stops:["Constellation","Waterleaf","Dean"], schedule:{startHour:7, endHour:18, legs:[
+                      {label:"Depart AAMU",offset:5},{label:"Arrive Constellation",offset:15},{label:"Depart Constellation",offset:20},{label:"Arrive Waterleaf",offset:30},{label:"Depart Waterleaf",offset:35},{label:"Arrive Dean",offset:40},{label:"Depart Dean",offset:45},{label:"Arrive AAMU",offset:55}]}},
+    huntsville:   {label:"Huntsville Place", category:"Day", stops:["Huntsville Place"], schedule:{startHour:7, endHour:18, legs:[
+                      {label:"Depart AAMU",offset:5},{label:"Arrive Huntsville Place",offset:20},{label:"Depart Huntsville Place",offset:25},{label:"Arrive AAMU",offset:40}]}},
+    elroy1:       {label:"Elroy 1", category:"Day", stops:["Elroy"], schedule:{startHour:7, endHour:18, legs:[
+                      {label:"Depart AAMU",offset:5},{label:"Arrive Elroy",offset:25},{label:"Depart Elroy",offset:30},{label:"Arrive AAMU",offset:50}]}},
+    elroy2:       {label:"Elroy 2", category:"Day", stops:["Elroy"], schedule:{startHour:7, endHour:18, legs:[
+                      {label:"Depart AAMU",offset:15},{label:"Arrive Elroy",offset:35},{label:"Depart Elroy",offset:40},{label:"Arrive AAMU",offset:60}]}},
+    west_night:   {label:"West Night: HSV PL & Elroy", category:"Night", stops:["Huntsville Place","Elroy"], schedule:{startHour:18, endHour:22, legs:[
+                      {label:"Depart AAMU",offset:20},{label:"Arrive Huntsville Place",offset:40},{label:"Depart Huntsville Place",offset:45},{label:"Arrive Elroy",offset:50},{label:"Depart Elroy",offset:55},{label:"Arrive AAMU",offset:75}]}},
+    east_night:   {label:"East Night: Dean/Water/Constellation", category:"Night", stops:["Dean","Waterleaf","Constellation"], schedule:{startHour:18, endHour:22, legs:[
+                      {label:"Depart AAMU",offset:20},{label:"Arrive Dean",offset:30},{label:"Depart Dean",offset:35},{label:"Arrive Waterleaf",offset:40},{label:"Depart Waterleaf",offset:45},{label:"Arrive Constellation",offset:55},{label:"Depart Constellation",offset:60},{label:"Arrive AAMU",offset:70}]}},
+    west_weekend: {label:"West Wknd/Holiday: HSV PL & Elroy", category:"Weekend/Holiday", stops:["Huntsville Place","Elroy"], schedule:{startHour:8, endHour:18, legs:[
+                      {label:"Depart AAMU",offset:20},{label:"Arrive Huntsville Place",offset:40},{label:"Depart Huntsville Place",offset:45},{label:"Arrive Elroy",offset:50},{label:"Depart Elroy",offset:55},{label:"Arrive AAMU",offset:75}]}},
+    east_weekend: {label:"East Wknd/Holiday: Dean/Water/Constellation", category:"Weekend/Holiday", stops:["Constellation","Waterleaf","Dean"], schedule:{startHour:8, endHour:18, legs:[
+                      {label:"Depart AAMU",offset:20},{label:"Arrive Constellation",offset:30},{label:"Depart Constellation",offset:35},{label:"Arrive Waterleaf",offset:45},{label:"Depart Waterleaf",offset:50},{label:"Arrive Dean",offset:60},{label:"Depart Dean",offset:65},{label:"Arrive AAMU",offset:75}]}}
   };
-  const SCHEDULE_SLOTS = ["7:05 AM","8:05 AM","9:05 AM","10:05 AM","11:05 AM","12:05 PM","1:05 PM","2:05 PM","3:05 PM","4:05 PM","5:05 PM"];
+  const ROUTE_CATEGORIES = ["Day","Night","Weekend/Holiday"];
   function routeShort(key){ return ROUTES[key].label; }
-  function parseSlotMinutes(slot){
-    const m = slot.match(/(\d+):(\d+)\s*(AM|PM)/i);
-    let h = parseInt(m[1],10), mins = parseInt(m[2],10);
-    const ap = m[3].toUpperCase();
-    if(ap==='PM' && h!==12) h+=12;
-    if(ap==='AM' && h===12) h=0;
-    return h*60+mins;
+  function routeGridHtml(selectedKey){
+    return ROUTE_CATEGORIES.map(cat=>{
+      const keys = Object.keys(ROUTES).filter(k=>ROUTES[k].category===cat);
+      if(keys.length===0) return "";
+      return `
+        <div class="route-cat-label">${cat}</div>
+        <div class="big-route-grid">
+          ${keys.map(k=>`<div class="big-route-btn ${selectedKey===k?'active':''}" data-route="${k}" tabindex="0">${routeShort(k)}</div>`).join("")}
+        </div>
+      `;
+    }).join("");
+  }
+  function wireRouteGrid(container, onSelect){
+    container.querySelectorAll(".big-route-btn").forEach(btn=>{
+      btn.onclick = () => {
+        container.querySelectorAll(".big-route-btn").forEach(b=>b.classList.remove("active"));
+        btn.classList.add("active");
+        onSelect(btn.dataset.route);
+      };
+    });
   }
   function nowMinutes(){ const d=new Date(); return d.getHours()*60+d.getMinutes(); }
-  function nearestSlot(){
+  function fmtClock(totalMin){
+    let h = Math.floor(totalMin/60) % 24, m = totalMin % 60;
+    const ap = h>=12 ? "PM" : "AM";
+    let h12 = h % 12; if(h12===0) h12 = 12;
+    return h12+":"+String(m).padStart(2,"0")+" "+ap;
+  }
+  // Next scheduled AAMU departure for a route, based on its own start/end hours and
+  // hourly minute-offset (e.g. Dean departs :20 past every hour, 7am-6pm).
+  function nextScheduledRun(routeKey){
+    const sch = ROUTES[routeKey] && ROUTES[routeKey].schedule;
+    if(!sch) return null;
+    const departMin = sch.legs[0].offset;
     const nowMin = nowMinutes();
-    let best = SCHEDULE_SLOTS[0], bestDiff = Infinity;
-    SCHEDULE_SLOTS.forEach(s=>{ const diff = Math.abs(parseSlotMinutes(s)-nowMin); if(diff<bestDiff){ bestDiff=diff; best=s; } });
-    return best;
+    for(let hour = sch.startHour; hour <= sch.endHour; hour++){
+      const cand = hour*60 + departMin;
+      if(cand > sch.endHour*60) break;
+      if(cand >= nowMin) return fmtClock(cand);
+    }
+    return "No more runs today";
+  }
+  // Nearest scheduled departure to right now, for record-keeping on a newly started trip
+  // (may be slightly in the past, unlike nextScheduledRun which only looks forward).
+  function nearestRouteSlot(routeKey){
+    const sch = ROUTES[routeKey] && ROUTES[routeKey].schedule;
+    if(!sch) return null;
+    const departMin = sch.legs[0].offset;
+    const nowMin = nowMinutes();
+    let best = null, bestDiff = Infinity;
+    for(let hour = sch.startHour; hour <= sch.endHour; hour++){
+      const cand = hour*60 + departMin;
+      if(cand > sch.endHour*60) break;
+      const diff = Math.abs(cand-nowMin);
+      if(diff < bestDiff){ bestDiff = diff; best = cand; }
+    }
+    return best===null ? null : fmtClock(best);
+  }
+  // Full timetable for a route: one row per scheduled hourly run, one column per leg.
+  function fullScheduleHtml(routeKey){
+    const sch = ROUTES[routeKey] && ROUTES[routeKey].schedule;
+    if(!sch) return '<div class="empty-note">No schedule available.</div>';
+    const departMin = sch.legs[0].offset;
+    const rows = [];
+    for(let hour = sch.startHour; hour <= sch.endHour; hour++){
+      const depart = hour*60 + departMin;
+      if(depart > sch.endHour*60) break;
+      rows.push(sch.legs.map(leg => fmtClock(hour*60 + leg.offset)));
+    }
+    const header = sch.legs.map(leg=>`<th>${leg.label}</th>`).join("");
+    const body = rows.map(r=>`<tr>${r.map(t=>`<td>${t}</td>`).join("")}</tr>`).join("");
+    return `<table class="feed"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
   const PRETRIP_ITEMS = [
@@ -391,7 +468,7 @@
     selectedRouteChoice:null, pretripAnswers:{}, pretripPhoto:null, postTripAnswers:{}, shiftRecord:null,
     stopPhase:'arriving', pendingStop:null, divertedName:'',
     pendingIds:new Set(), changingRoute:false,
-    dispatchTab:'live', lastSearch:null, lastIssues:[],
+    dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null,
     day:{trips:[]}, lastKnownDay:{trips:[]}, pollHandle:null, flushHandle:null
   };
   state.flushHandle = setInterval(flushPending, 8000);
@@ -553,7 +630,8 @@
       </div>
       <div class="card">
         <div class="card-label">Pick Route</div>
-        <div class="big-route-grid" id="route-grid"></div>
+        <div id="route-grid"></div>
+        <div class="disclosure" id="pretrip-next-run" style="display:none;"></div>
       </div>
       <div class="card">
         <div class="card-label">Pre-Trip Inspection</div>
@@ -578,17 +656,18 @@
     vInput.oninput = () => { if(vInput.value.trim()) vInput.classList.remove("pt-error-field"); };
 
     const grid = document.getElementById("route-grid");
-    Object.keys(ROUTES).forEach(key=>{
-      const btn = document.createElement("div");
-      btn.className = "big-route-btn" + (state.selectedRouteChoice===key ? " active" : "");
-      btn.textContent = routeShort(key); btn.tabIndex = 0;
-      btn.onclick = () => {
-        state.selectedRouteChoice = key;
-        [...grid.children].forEach(c=>c.classList.remove("active"));
-        btn.classList.add("active");
-        grid.style.outline = "";
-      };
-      grid.appendChild(btn);
+    grid.innerHTML = routeGridHtml(state.selectedRouteChoice);
+    const nextRunBox = document.getElementById("pretrip-next-run");
+    function showNextRun(key){
+      if(!key){ nextRunBox.style.display = "none"; return; }
+      nextRunBox.style.display = "block";
+      nextRunBox.textContent = `Next Scheduled Run for ${routeShort(key)}: ${nextScheduledRun(key)}`;
+    }
+    showNextRun(state.selectedRouteChoice);
+    wireRouteGrid(grid, (key) => {
+      state.selectedRouteChoice = key;
+      grid.style.outline = "";
+      showNextRun(key);
     });
 
     if(!already){
@@ -693,7 +772,7 @@
     const trip = {
       id:"trip-"+Date.now(), route: state.shiftRoute, driver: state.driverLock.name,
       vehicle: state.shiftVehicle, vehicleCapacity: state.shiftCapacity,
-      date: todayKey(), tripNum: tripsToday.length+1, scheduledRun: nearestSlot(),
+      date: todayKey(), tripNum: tripsToday.length+1, scheduledRun: nearestRouteSlot(state.shiftRoute),
       departAAMU: null, departMeta: null,
       stops:[], arriveAAMU:null, arriveMeta:null, complete:false
     };
@@ -741,26 +820,22 @@
       driverView.innerHTML = `
         <div class="card">
           <div class="card-label">Pick New Route <button class="link-btn" id="cancel-change-route">Cancel</button></div>
-          <div class="big-route-grid" id="route-grid-change"></div>
+          <div id="route-grid-change"></div>
         </div>
       `;
       const grid = document.getElementById("route-grid-change");
-      Object.keys(ROUTES).forEach(key=>{
-        const btn = document.createElement("div");
-        btn.className = "big-route-btn" + (key===trip.route ? " active" : "");
-        btn.textContent = routeShort(key); btn.tabIndex = 0;
-        btn.onclick = async () => {
-          if(key === trip.route){ state.changingRoute = false; renderLogPage(); return; }
-          if(trip.stops.length>0){
-            const ok = confirm(`This trip already has ${trip.stops.length} stop(s) logged under ${routeShort(trip.route)}. Switching to ${routeShort(key)} won't relabel them. Continue?`);
-            if(!ok) return;
-          }
-          trip.route = key; state.shiftRoute = key;
-          await syncTrip(trip);
-          state.changingRoute = false;
-          renderLogPage();
-        };
-        grid.appendChild(btn);
+      grid.innerHTML = routeGridHtml(trip.route);
+      wireRouteGrid(grid, async (key) => {
+        if(key === trip.route){ state.changingRoute = false; renderLogPage(); return; }
+        if(trip.stops.length>0){
+          const ok = confirm(`This trip already has ${trip.stops.length} stop(s) logged under ${routeShort(trip.route)}. Switching to ${routeShort(key)} won't relabel them. Continue?`);
+          if(!ok) return;
+        }
+        trip.route = key; state.shiftRoute = key;
+        await syncTrip(trip);
+        state.changingRoute = false;
+        state.showFullSchedule = false;
+        renderLogPage();
       });
       document.getElementById("cancel-change-route").onclick = () => { state.changingRoute = false; renderLogPage(); };
       return;
@@ -777,7 +852,12 @@
         <div class="info-row"><span>Driver</span><strong>${trip.driver}</strong></div>
         <div class="info-row"><span>Route</span><strong>${routeShort(trip.route)}</strong></div>
         <div class="info-row"><span>Capacity</span><strong>${cap}</strong></div>
+        <div class="info-row"><span>Next Scheduled Run</span><strong>${nextScheduledRun(trip.route)}</strong></div>
         <button class="link-btn" id="change-route-btn" style="margin-top:6px;">Change Route</button>
+        <button class="link-btn" id="toggle-schedule-btn" style="margin-top:6px;">${state.showFullSchedule ? 'Collapse Schedule' : 'See Full Schedule'}</button>
+        <div id="full-schedule-box" style="display:${state.showFullSchedule?'block':'none'};margin-top:8px;overflow-x:auto;">
+          ${state.showFullSchedule ? fullScheduleHtml(trip.route) : ''}
+        </div>
       </div>
       ${renderStopPhaseCard(defaultStopName)}
       <div class="card">
@@ -788,6 +868,7 @@
     `;
 
     document.getElementById("change-route-btn").onclick = () => { state.changingRoute = true; renderLogPage(); };
+    document.getElementById("toggle-schedule-btn").onclick = () => { state.showFullSchedule = !state.showFullSchedule; renderLogPage(); };
     document.getElementById("end-shift-btn").onclick = () => endShift();
     wireStopPhase(trip, defaultStopName, cap, route);
   }
@@ -854,10 +935,13 @@
         </div>
       `;
     }
-    const name = state.pendingStop.name;
+    const name = state.divertedName || state.pendingStop.name;
     return `
       <div class="card">
-        <div class="card-label">Departing: ${name}</div>
+        <div class="card-label">Departing: ${name} <button class="link-btn" id="diff-loc-btn-depart">Different location?</button></div>
+        <div id="diff-loc-box-depart" style="display:${state.divertedName?'block':'none'};margin-bottom:8px;">
+          <input type="text" id="diff-loc-input-depart" value="${state.divertedName||''}" placeholder="Type actual location" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;">
+        </div>
         <div class="landscape-row">
           <div class="big-block">
             <div class="big-label">Time</div>
@@ -969,6 +1053,11 @@
       return;
     }
     document.getElementById("fill-now-depart").onclick = () => { document.getElementById("depart-time-input").value = nowTime(); };
+    document.getElementById("diff-loc-btn-depart").onclick = () => {
+      const box = document.getElementById("diff-loc-box-depart");
+      box.style.display = box.style.display==='none' ? 'block' : 'none';
+      if(box.style.display==='block') document.getElementById("diff-loc-input-depart").focus();
+    };
     ["going","coming"].forEach(kind=>{
       const box = document.getElementById("stepper-"+kind);
       box.querySelectorAll("button").forEach(btn=>{
@@ -999,6 +1088,9 @@
       const btn = document.getElementById("log-departure-btn");
       btn.disabled = true; btn.textContent = "Logging…";
       const depart = document.getElementById("depart-time-input").value;
+      const diffInputDepart = document.getElementById("diff-loc-input-depart");
+      state.divertedName = diffInputDepart ? diffInputDepart.value.trim() : (state.divertedName||'');
+      const finalName = state.divertedName || state.pendingStop.name;
       const going = parseInt(document.getElementById("stepper-going").dataset.count,10);
       const coming = parseInt(document.getElementById("stepper-coming").dataset.count,10);
       const overflowActive = ofToggle.dataset.active === "1";
@@ -1007,7 +1099,7 @@
       const geo = await getGeo();
       const departMeta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
       const stopRecord = {
-        name: state.pendingStop.name, diverted: state.pendingStop.diverted,
+        name: finalName, diverted: state.pendingStop.diverted || !!state.divertedName,
         arrive: state.pendingStop.arrive, arriveMeta: state.pendingStop.arriveMeta,
         depart, departMeta, going, coming, leftBehind, overflow, acknowledged:false,
         systemTimestamp: state.pendingStop.arriveMeta.timestamp
@@ -1187,11 +1279,21 @@
     return exceptions;
   }
 
-  function buildFeedRows(trips){
+  function buildFeedRows(trips, editable){
     return trips.slice().reverse().flatMap(t=>{
       const rows = [];
       if(t.arriveAAMU && t.arriveMeta){
-        rows.push(`<tr><td class="mono">${fmtSysTime(t.arriveMeta.timestamp)}</td><td colspan="2">Arrive AAMU: ${t.arriveAAMU}</td><td>${routeShort(t.route)}</td><td>${t.driver}</td><td>AAMU</td><td>—</td><td>—</td><td>—</td><td>${t.vehicleCapacity||DEFAULT_CAPACITY}</td><td>${fmtGeo(t.arriveMeta.lat,t.arriveMeta.lng,t.arriveMeta.gpsError)}</td><td>—</td></tr>`);
+        if(editable && state.editingRow === t.id+':arrive'){
+          rows.push(`<tr><td colspan="12"><div class="edit-form">
+            <strong style="margin-right:6px;">Arrive AAMU —</strong>
+            <label style="font-size:11px;">Time</label>
+            <input type="text" id="edit-arrive-time-${t.id}" value="${t.arriveAAMU}" class="wide">
+            <button class="link-btn" data-save-trip="${t.id}" data-save-field="arrive">Save</button>
+            <button class="link-btn danger" data-cancel-edit="1">Cancel</button>
+          </div></td></tr>`);
+        } else {
+          rows.push(`<tr><td class="mono">${fmtSysTime(t.arriveMeta.timestamp)}</td><td colspan="2">Arrive AAMU: ${t.arriveAAMU}</td><td>${routeShort(t.route)}</td><td>${t.driver}</td><td>AAMU</td><td>—</td><td>—</td><td>—</td><td>${t.vehicleCapacity||DEFAULT_CAPACITY}</td><td>${fmtGeo(t.arriveMeta.lat,t.arriveMeta.lng,t.arriveMeta.gpsError)}</td><td>${editable?`<button class="link-btn" data-edit-trip="${t.id}" data-edit-field="arrive">Edit</button>`:'—'}</td></tr>`);
+        }
       }
       t.stops.slice().reverse().forEach(s=>{
         rows.push(`
@@ -1209,7 +1311,21 @@
       `);
       });
       if(t.departAAMU && t.departMeta){
-        rows.push(`<tr class="${t.departOverflow?'overflow':''}"><td class="mono">${fmtSysTime(t.departMeta.timestamp)}</td><td colspan="2">Depart AAMU: ${t.departAAMU}</td><td>${routeShort(t.route)}</td><td>${t.driver}</td><td>AAMU</td><td>${t.departGoing||0}</td><td>${t.departComing||0}</td><td>${t.departLeftBehind==null?'—':t.departLeftBehind}</td><td>${t.vehicleCapacity||DEFAULT_CAPACITY}</td><td>${fmtGeo(t.departMeta.lat,t.departMeta.lng,t.departMeta.gpsError)}</td><td>${t.departOverflow?'<span class="tag over">Overflow</span>':'<span class="tag ok">OK</span>'}</td></tr>`);
+        if(editable && state.editingRow === t.id+':depart'){
+          rows.push(`<tr><td colspan="12"><div class="edit-form">
+            <strong style="margin-right:6px;">Depart AAMU —</strong>
+            <label style="font-size:11px;">Time</label>
+            <input type="text" id="edit-depart-time-${t.id}" value="${t.departAAMU}" class="wide">
+            <label style="font-size:11px;">Going</label>
+            <input type="number" min="0" id="edit-depart-going-${t.id}" value="${t.departGoing||0}">
+            <label style="font-size:11px;">Coming</label>
+            <input type="number" min="0" id="edit-depart-coming-${t.id}" value="${t.departComing||0}">
+            <button class="link-btn" data-save-trip="${t.id}" data-save-field="depart">Save</button>
+            <button class="link-btn danger" data-cancel-edit="1">Cancel</button>
+          </div></td></tr>`);
+        } else {
+          rows.push(`<tr class="${t.departOverflow?'overflow':''}"><td class="mono">${fmtSysTime(t.departMeta.timestamp)}</td><td colspan="2">Depart AAMU: ${t.departAAMU}</td><td>${routeShort(t.route)}</td><td>${t.driver}</td><td>AAMU</td><td>${t.departGoing||0}</td><td>${t.departComing||0}</td><td>${t.departLeftBehind==null?'—':t.departLeftBehind}</td><td>${t.vehicleCapacity||DEFAULT_CAPACITY}</td><td>${fmtGeo(t.departMeta.lat,t.departMeta.lng,t.departMeta.gpsError)}</td><td>${t.departOverflow?'<span class="tag over">Overflow</span>':'<span class="tag ok">OK</span>'} ${editable?`<button class="link-btn" data-edit-trip="${t.id}" data-edit-field="depart">Edit</button>`:''}</td></tr>`);
+        }
       }
       return rows;
     }).join("");
@@ -1276,7 +1392,7 @@
         `</span></div>`
       : `<div class="headsign"><span>ALL ROUTES NORMAL — NO OVERFLOW ALERTS</span></div>`;
 
-    const feedRows = buildFeedRows(trips);
+    const feedRows = buildFeedRows(trips, true);
 
     const exceptions = computeExceptions(trips);
     const routeOptions = Object.keys(ROUTES).map(k=>`<option value="${k}">${routeShort(k)}</option>`).join("");
@@ -1357,6 +1473,40 @@
           if(idx===-1) trip.departAcknowledged = true; else trip.stops[idx].acknowledged = true;
           await saveDay(day);
         }
+        await refreshDispatch();
+      };
+    });
+
+    dispatchView.querySelectorAll("[data-edit-trip]").forEach(btn=>{
+      btn.onclick = () => {
+        state.editingRow = btn.dataset.editTrip + ":" + btn.dataset.editField;
+        renderDispatch(state.lastIssues);
+      };
+    });
+    dispatchView.querySelectorAll("[data-cancel-edit]").forEach(btn=>{
+      btn.onclick = () => { state.editingRow = null; renderDispatch(state.lastIssues); };
+    });
+    dispatchView.querySelectorAll("[data-save-trip]").forEach(btn=>{
+      btn.onclick = async () => {
+        const tripId = btn.dataset.saveTrip, field = btn.dataset.saveField;
+        btn.disabled = true; btn.textContent = "Saving…";
+        const res = await loadDayForWrite();
+        if(!res.ok){ alert("Couldn't save — connection issue, please try again."); btn.disabled=false; btn.textContent="Save"; return; }
+        const day = res.data;
+        const trip = day.trips.find(t=>t.id===tripId);
+        if(trip){
+          if(field === 'arrive'){
+            trip.arriveAAMU = document.getElementById(`edit-arrive-time-${tripId}`).value;
+          } else {
+            trip.departAAMU = document.getElementById(`edit-depart-time-${tripId}`).value;
+            trip.departGoing = parseInt(document.getElementById(`edit-depart-going-${tripId}`).value,10) || 0;
+            trip.departComing = parseInt(document.getElementById(`edit-depart-coming-${tripId}`).value,10) || 0;
+            const cap = trip.vehicleCapacity || DEFAULT_CAPACITY;
+            trip.departOverflow = trip.departGoing > cap || trip.departComing > cap;
+          }
+          await saveDay(day);
+        }
+        state.editingRow = null;
         await refreshDispatch();
       };
     });
