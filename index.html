@@ -6,6 +6,7 @@
 <title>Bulldog Transit System - Driver Log</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
@@ -251,6 +252,8 @@
 
   .exception-item{background:#FBF1E6;border:1px solid var(--warn-orange);border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:12.5px;color:var(--warn-orange);font-weight:600;}
   .issue-item{background:#FCEAE6;border:1px solid var(--alert-red);border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:12.5px;color:var(--alert-red);font-weight:600;}
+  .signin-item{padding:6px 0;border-bottom:1px dashed var(--line);font-size:12.5px;}
+  .signin-item:last-child{border-bottom:none;}
   .alert-item{display:flex;justify-content:space-between;align-items:center;background:#FCEAE6;border:1px solid var(--alert-red);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px;}
   .alert-item .a-txt{font-weight:700;color:var(--alert-red);}
   .alert-item .a-time{font-size:11px;color:var(--muted);font-weight:600;}
@@ -551,7 +554,7 @@
     selectedRouteChoice:null, pretripAnswers:{}, pretripPhoto:null, pretripFuel:null, posttripFuel:null, postTripAnswers:{}, shiftRecord:null,
     stopPhase:'arriving', pendingStop:null, divertedName:'',
     pendingIds:new Set(), changingRoute:false,
-    dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(),
+    dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(), lastSignIns:[], lastSignInSearch:null,
     day:{trips:[]}, lastKnownDay:{trips:[]}, pollHandle:null, flushHandle:null
   };
   state.flushHandle = setInterval(flushPending, 8000);
@@ -683,7 +686,20 @@
       state.selectedRouteChoice = cs0.pretrip.route;
     }
     state.pretripAnswers = {}; state.pretripPhoto = null; state.pretripFuel = null; state.posttripFuel = null; state.postTripAnswers = {};
+    logDriverSignIn(name);
     await renderDriverHome();
+  }
+  // Records a timestamp + GPS location every time a driver successfully logs in — a backup
+  // reference for timesheets, since drivers sometimes forget to clock in on the timeclock.
+  // Runs in the background (doesn't block the driver's screen); appends rather than overwrites,
+  // so re-logins/second shifts the same day all stay on record, dispatch just reads the earliest.
+  async function logDriverSignIn(name){
+    try{
+      const geo = await getGeo();
+      if(!state.shiftRecord.loginLog) state.shiftRecord.loginLog = [];
+      state.shiftRecord.loginLog.push({timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError});
+      await saveShiftRecord(name, state.shiftRecord);
+    }catch(e){}
   }
 
   async function renderDriverHome(){
@@ -1483,8 +1499,33 @@
     else { state.day = state.lastKnownDay; }
     const issues = await loadVehicleIssues();
     state.lastIssues = issues;
+    state.lastSignIns = await loadDriverSignIns();
     if(state.dispatchTab === 'map' && busMapInstance) return; // don't tear down the live map's DOM every 5s
     renderDispatch(issues);
+  }
+
+  async function loadDriverSignIns(dateStr){
+    dateStr = dateStr || todayKey();
+    try{
+      const listRes = await window.storage.list("bts-shift-", true);
+      if(!listRes || !listRes.keys) return [];
+      const suffix = "-"+dateStr;
+      const dateKeys = listRes.keys.filter(k=>k.endsWith(suffix));
+      const signIns = [];
+      for(const key of dateKeys){
+        try{
+          const r = await window.storage.get(key, true);
+          if(!r) continue;
+          const rec = JSON.parse(r.value);
+          const driverName = key.replace("bts-shift-","").replace(suffix,"");
+          if(rec.loginLog && rec.loginLog.length){
+            rec.loginLog.forEach(l=> signIns.push({driver:driverName, timestamp:l.timestamp, lat:l.lat, lng:l.lng, gpsError:l.gpsError}));
+          }
+        }catch(e){}
+      }
+      signIns.sort((a,b)=> new Date(a.timestamp) - new Date(b.timestamp));
+      return signIns;
+    }catch(e){ return []; }
   }
 
   async function loadVehicleIssues(){
@@ -1519,6 +1560,15 @@
     if(lat==null || lng==null) return `<span class="mono">no GPS${gpsError?` (${gpsError})`:''}</span>`;
     const url = `https://www.google.com/maps?q=${lat},${lng}`;
     return `<a class="gps-link" href="${url}" target="_blank" rel="noopener">${lat.toFixed(5)}, ${lng.toFixed(5)}</a>`;
+  }
+
+  function firstSignInsByDriver(signIns){
+    const byDriver = {};
+    signIns.forEach(s=>{
+      if(!byDriver[s.driver]) byDriver[s.driver] = {first:s, count:0};
+      byDriver[s.driver].count++;
+    });
+    return Object.keys(byDriver).sort().map(d=>({driver:d, ...byDriver[d]}));
   }
 
   function computeExceptions(trips){
@@ -1667,19 +1717,103 @@
     `;
   }
 
+  function signInsHtml(signIns, showHeader){
+    if(showHeader === undefined) showHeader = true;
+    const rows = firstSignInsByDriver(signIns);
+    const header = showHeader ? '<div class="card-label" style="margin-top:14px;">Driver Sign-Ins</div>' : '';
+    if(rows.length===0) return `${header}<div class="empty-note">No sign-ins found for this date.</div>`;
+    return `
+      ${header}
+      ${rows.map(r=>`
+        <div class="signin-item">
+          <div><strong>${r.driver}</strong> — ${fmtSysTime(r.first.timestamp)}${r.count>1?` <span class="mono" style="color:var(--muted);">(+${r.count-1} more)</span>`:''}</div>
+          <div class="mono">${fmtGeo(r.first.lat, r.first.lng, r.first.gpsError)}</div>
+        </div>
+      `).join("")}
+    `;
+  }
+  async function runSignInSearch(){
+    const dateVal = document.getElementById("signin-search-date").value;
+    const resultsBox = document.getElementById("signin-search-results");
+    if(!dateVal){ resultsBox.innerHTML = '<div class="empty-note">Pick a date to search.</div>'; return; }
+    resultsBox.innerHTML = '<div class="empty-note">Searching…</div>';
+    const signIns = await loadDriverSignIns(dateVal);
+    const html = signInsHtml(signIns, false);
+    state.lastSignInSearch = {dateVal, html};
+    resultsBox.innerHTML = html;
+  }
+
+  function dateRangeList(startStr, endStr){
+    const dates = [];
+    let cur = new Date(startStr+"T00:00:00");
+    const end = new Date(endStr+"T00:00:00");
+    while(cur <= end){
+      dates.push(cur.getFullYear()+"-"+String(cur.getMonth()+1).padStart(2,"0")+"-"+String(cur.getDate()).padStart(2,"0"));
+      cur.setDate(cur.getDate()+1);
+    }
+    return dates;
+  }
+  async function runRidershipExport(){
+    const startVal = document.getElementById("export-start-date").value;
+    const endVal = document.getElementById("export-end-date").value;
+    const routeVal = document.getElementById("export-route").value;
+    const statusEl = document.getElementById("export-status");
+    if(!startVal || !endVal){ statusEl.innerHTML = '<div class="empty-note">Pick both a start and end date.</div>'; return; }
+    if(new Date(startVal) > new Date(endVal)){ statusEl.innerHTML = '<div class="empty-note">Start date must be before end date.</div>'; return; }
+    statusEl.innerHTML = '<div class="empty-note">Gathering data…</div>';
+    const dates = dateRangeList(startVal, endVal);
+    const rows = [];
+    for(const dateStr of dates){
+      let trips = [];
+      try{
+        const r = await window.storage.get("bts-day-"+dateStr, true);
+        trips = (JSON.parse(r.value).trips) || [];
+      }catch(e){ continue; } // no data for this date, skip
+      if(routeVal !== "all") trips = trips.filter(t=>t.route===routeVal);
+      trips.forEach(t=>{
+        if(t.departAAMU && t.departMeta){
+          rows.push({
+            Date: dateStr, Route: routeShort(t.route), Driver: t.driver, "Trip #": t.tripNum,
+            Event: "Depart AAMU", Time: t.departAAMU, Going: t.departGoing||0, Coming: t.departComing||0,
+            "Left Behind": t.departLeftBehind||0, Overflow: t.departOverflow?"Yes":"No",
+            Diverted: "No", "No Passengers": t.noPassengers?"Yes":"No"
+          });
+        }
+        t.stops.forEach(s=>{
+          if(!s.depart) return; // only departed stops carry ridership counts
+          rows.push({
+            Date: dateStr, Route: routeShort(t.route), Driver: t.driver, "Trip #": t.tripNum,
+            Event: s.name, Time: s.depart, Going: s.going||0, Coming: s.coming||0,
+            "Left Behind": s.leftBehind||0, Overflow: s.overflow?"Yes":"No",
+            Diverted: s.diverted?"Yes":"No", "No Passengers": "No"
+          });
+        });
+      });
+    }
+    if(rows.length===0){ statusEl.innerHTML = '<div class="empty-note">No ridership data found for that range.</div>'; return; }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Ridership");
+    const filename = `BTS-Ridership-${startVal}-to-${endVal}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    statusEl.innerHTML = `<div class="empty-note">Downloaded ${filename} — ${rows.length} rows.</div>`;
+  }
+
   async function runLogSearch(){
     const dateVal = document.getElementById("search-date").value;
     const routeVal = document.getElementById("search-route").value;
     const resultsBox = document.getElementById("search-results");
     if(!dateVal){ resultsBox.innerHTML = '<div class="empty-note">Pick a date to search.</div>'; return; }
     resultsBox.innerHTML = '<div class="empty-note">Searching…</div>';
+    const signIns = await loadDriverSignIns(dateVal);
     let dayData;
     try{
       const r = await window.storage.get("bts-day-"+dateVal, true);
       dayData = JSON.parse(r.value);
     }catch(e){
-      state.lastSearch = {dateVal, routeVal, html: `<div class="empty-note">No log sheets found for ${dateVal}.</div>`};
-      resultsBox.innerHTML = state.lastSearch.html;
+      const html = `<div class="empty-note">No log sheets found for ${dateVal}.</div>${signInsHtml(signIns)}`;
+      state.lastSearch = {dateVal, routeVal, html};
+      resultsBox.innerHTML = html;
       return;
     }
     let trips = dayData.trips || [];
@@ -1690,6 +1824,7 @@
     } else {
       html = feedTableHtml(buildFeedRows(trips), "No entries match.");
     }
+    html += signInsHtml(signIns);
     state.lastSearch = {dateVal, routeVal, html};
     resultsBox.innerHTML = html;
   }
@@ -1758,6 +1893,29 @@
           <button class="btn btn-primary btn-small" id="search-btn" style="width:auto;">Search</button>
           <div id="search-results" style="margin-top:12px;">${state.lastSearch ? state.lastSearch.html : ''}</div>
         </div>
+        <div class="card">
+          <div class="card-label">Export Ridership Data</div>
+          <div class="field-row">
+            <div class="field"><label>Start Date</label><input type="date" id="export-start-date" value="${todayKey()}"></div>
+            <div class="field"><label>End Date</label><input type="date" id="export-end-date" value="${todayKey()}"></div>
+            <div class="field"><label>Route</label>
+              <select id="export-route">
+                <option value="all">All Routes</option>
+                ${Object.keys(ROUTES).map(k=>`<option value="${k}">${routeShort(k)}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-small" id="export-btn" style="width:auto;">Export to Excel</button>
+          <div id="export-status" style="margin-top:8px;"></div>
+        </div>
+        <div class="card">
+          <div class="card-label">Search Driver Sign-Ins</div>
+          <div class="field-row">
+            <div class="field"><label>Date</label><input type="date" id="signin-search-date" value="${state.lastSignInSearch?state.lastSignInSearch.dateVal:todayKey()}"></div>
+          </div>
+          <button class="btn btn-primary btn-small" id="signin-search-btn" style="width:auto;">Search</button>
+          <div id="signin-search-results" style="margin-top:12px;">${state.lastSignInSearch ? state.lastSignInSearch.html : ''}</div>
+        </div>
       </div>
 
       <div id="pane-live" style="display:${state.dispatchTab==='live'?'block':'none'};">
@@ -1785,6 +1943,20 @@
               <div class="card-label">Vehicle Inspection Issues</div>
               ${issues.length===0 ? '<div class="empty-note">No issues reported today.</div>' : issues.map(i=>`<div class="issue-item">${i.phase} — ${i.driver}: ${i.item}${i.note?` — "${i.note}"`:''}</div>`).join("")}
             </div>
+            <div class="card">
+              <div class="card-label">Driver Sign-Ins Today</div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Backup for timesheets — captured whenever a driver logs into the app.</div>
+              ${(() => {
+                const rows = firstSignInsByDriver(state.lastSignIns);
+                if(rows.length===0) return '<div class="empty-note">No sign-ins yet today.</div>';
+                return rows.map(r=>`
+                  <div class="signin-item">
+                    <div><strong>${r.driver}</strong> — ${fmtSysTime(r.first.timestamp)}${r.count>1?` <span class="mono" style="color:var(--muted);">(+${r.count-1} more)</span>`:''}</div>
+                    <div class="mono">${fmtGeo(r.first.lat, r.first.lng, r.first.gpsError)}</div>
+                  </div>
+                `).join("");
+              })()}
+            </div>
           </div>
           <div class="dispatch-routes">
             ${ROUTE_BOX_ROWS.map(row=>routeRowHtml(row, trips)).join("")}
@@ -1805,6 +1977,8 @@
     document.getElementById("tab-map-btn").onclick = () => { state.dispatchTab = 'map'; renderDispatch(state.lastIssues); };
     if(state.dispatchTab === 'map') initBusMap();
     document.getElementById("search-btn").onclick = runLogSearch;
+    document.getElementById("export-btn").onclick = runRidershipExport;
+    document.getElementById("signin-search-btn").onclick = runSignInSearch;
 
     dispatchView.querySelectorAll("[data-trip]").forEach(btn=>{
       btn.onclick = async () => {
