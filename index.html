@@ -554,7 +554,7 @@
     selectedRouteChoice:null, pretripAnswers:{}, pretripPhoto:null, pretripFuel:null, posttripFuel:null, postTripAnswers:{}, shiftRecord:null,
     stopPhase:'arriving', pendingStop:null, divertedName:'',
     pendingIds:new Set(), changingRoute:false,
-    dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(), lastSignIns:[], lastSignInSearch:null,
+    dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(), lastSignIns:[], lastSignInSearch:null, lastConsolidatedSearch:null,
     day:{trips:[]}, lastKnownDay:{trips:[]}, pollHandle:null, flushHandle:null
   };
   state.flushHandle = setInterval(flushPending, 8000);
@@ -1743,6 +1743,76 @@
     resultsBox.innerHTML = html;
   }
 
+  async function computeConsolidatedRidership(dateStr, routeVal){
+    let trips = [];
+    try{
+      const r = await window.storage.get("bts-day-"+dateStr, true);
+      trips = (JSON.parse(r.value).trips) || [];
+    }catch(e){ trips = []; }
+    const routeKeys = routeVal==='all' ? Object.keys(ROUTES) : [routeVal];
+    const rows = routeKeys.map(rk=>{
+      let going=0, coming=0;
+      trips.filter(t=>t.route===rk).forEach(t=>{
+        going += t.departGoing||0; coming += t.departComing||0;
+        t.stops.forEach(s=>{ going += s.going||0; coming += s.coming||0; });
+      });
+      return {route:rk, going, coming, total:going+coming};
+    });
+    const grandGoing = rows.reduce((s,r)=>s+r.going,0);
+    const grandComing = rows.reduce((s,r)=>s+r.coming,0);
+    return {rows, grandGoing, grandComing, grandTotal:grandGoing+grandComing};
+  }
+  function consolidatedTableHtml(dateStr, data){
+    return `
+      <div class="grid-route-label">${dateStr}</div>
+      <table class="log-grid"><thead><tr><th>Route</th><th>Going</th><th>Coming</th><th>Total</th></tr></thead>
+      <tbody>
+        ${data.rows.map(r=>`<tr><td>${routeShort(r.route)}</td><td>${r.going}</td><td>${r.coming}</td><td>${r.total}</td></tr>`).join("")}
+        <tr style="font-weight:800;"><td>All Routes</td><td>${data.grandGoing}</td><td>${data.grandComing}</td><td>${data.grandTotal}</td></tr>
+      </tbody></table>
+    `;
+  }
+  async function runConsolidatedSearch(){
+    const startVal = document.getElementById("consolidated-start-date").value;
+    const endVal = document.getElementById("consolidated-end-date").value;
+    const routeVal = document.getElementById("consolidated-route").value;
+    const resultsBox = document.getElementById("consolidated-results");
+    if(!startVal || !endVal){ resultsBox.innerHTML = '<div class="empty-note">Pick both a start and end date.</div>'; return; }
+    if(new Date(startVal) > new Date(endVal)){ resultsBox.innerHTML = '<div class="empty-note">Start date must be before end date.</div>'; return; }
+    resultsBox.innerHTML = '<div class="empty-note">Searching…</div>';
+    const dates = dateRangeList(startVal, endVal);
+    let html = "";
+    for(const d of dates){
+      const data = await computeConsolidatedRidership(d, routeVal);
+      html += consolidatedTableHtml(d, data);
+    }
+    state.lastConsolidatedSearch = {startVal, endVal, routeVal, html};
+    resultsBox.innerHTML = html;
+  }
+  async function runConsolidatedExport(){
+    const startVal = document.getElementById("consolidated-start-date").value;
+    const endVal = document.getElementById("consolidated-end-date").value;
+    const routeVal = document.getElementById("consolidated-route").value;
+    const statusEl = document.getElementById("consolidated-export-status");
+    if(!startVal || !endVal){ statusEl.innerHTML = '<div class="empty-note">Pick both a start and end date.</div>'; return; }
+    if(new Date(startVal) > new Date(endVal)){ statusEl.innerHTML = '<div class="empty-note">Start date must be before end date.</div>'; return; }
+    statusEl.innerHTML = '<div class="empty-note">Gathering data…</div>';
+    const dates = dateRangeList(startVal, endVal);
+    const rows = [];
+    for(const d of dates){
+      const data = await computeConsolidatedRidership(d, routeVal);
+      data.rows.forEach(r=> rows.push({Date:d, Route:routeShort(r.route), Going:r.going, Coming:r.coming, Total:r.total}));
+      rows.push({Date:d, Route:"All Routes", Going:data.grandGoing, Coming:data.grandComing, Total:data.grandTotal});
+    }
+    if(rows.length===0){ statusEl.innerHTML = '<div class="empty-note">No data found for that range.</div>'; return; }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Consolidated");
+    const filename = `BTS-Consolidated-Ridership-${startVal}-to-${endVal}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    statusEl.innerHTML = `<div class="empty-note">Downloaded ${filename} — ${rows.length} rows.</div>`;
+  }
+
   function dateRangeList(startStr, endStr){
     const dates = [];
     let cur = new Date(startStr+"T00:00:00");
@@ -1880,6 +1950,24 @@
 
       <div id="pane-search" style="display:${state.dispatchTab==='search'?'block':'none'};">
         <div class="card">
+          <div class="card-label">Consolidated Ridership</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Total ridership per route, per day — no trip-level detail.</div>
+          <div class="field-row">
+            <div class="field"><label>Start Date</label><input type="date" id="consolidated-start-date" value="${state.lastConsolidatedSearch?state.lastConsolidatedSearch.startVal:todayKey()}"></div>
+            <div class="field"><label>End Date</label><input type="date" id="consolidated-end-date" value="${state.lastConsolidatedSearch?state.lastConsolidatedSearch.endVal:todayKey()}"></div>
+            <div class="field"><label>Route</label>
+              <select id="consolidated-route">
+                <option value="all" ${state.lastConsolidatedSearch&&state.lastConsolidatedSearch.routeVal==='all'?'selected':''}>All Routes</option>
+                ${Object.keys(ROUTES).map(k=>`<option value="${k}" ${state.lastConsolidatedSearch&&state.lastConsolidatedSearch.routeVal===k?'selected':''}>${routeShort(k)}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-small" id="consolidated-search-btn" style="width:auto;">Search</button>
+          <button class="btn btn-outline btn-small" id="consolidated-export-btn" style="width:auto;margin-left:6px;">Export to Excel</button>
+          <div id="consolidated-export-status" style="margin-top:8px;"></div>
+          <div id="consolidated-results" style="margin-top:12px;">${state.lastConsolidatedSearch ? state.lastConsolidatedSearch.html : ''}</div>
+        </div>
+        <div class="card">
           <div class="card-label">Search Log Sheets</div>
           <div class="field-row">
             <div class="field"><label>Date</label><input type="date" id="search-date" value="${state.lastSearch?state.lastSearch.dateVal:todayKey()}"></div>
@@ -1979,6 +2067,8 @@
     document.getElementById("search-btn").onclick = runLogSearch;
     document.getElementById("export-btn").onclick = runRidershipExport;
     document.getElementById("signin-search-btn").onclick = runSignInSearch;
+    document.getElementById("consolidated-search-btn").onclick = runConsolidatedSearch;
+    document.getElementById("consolidated-export-btn").onclick = runConsolidatedExport;
 
     dispatchView.querySelectorAll("[data-trip]").forEach(btn=>{
       btn.onclick = async () => {
