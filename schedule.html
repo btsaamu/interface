@@ -1,0 +1,1644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BTS Schedule — Supervisors</title>
+<style>
+  :root{
+    --bg:#FAF7F2; --ink:#221B1A; --maroon:#6E1E2C; --maroon-dark:#4A1420;
+    --gold:#C7973F; --teal:#2F6E62; --slate:#55504A; --line:#E4DDD2; --danger:#A63A2E; --card:#FFFFFF; --trip:#3E6B8A;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.45;}
+  .display{font-family:"Arial Narrow","Helvetica Neue Condensed",Arial,sans-serif;font-weight:700;letter-spacing:.04em;text-transform:uppercase;}
+  .mono{font-family:"SFMono-Regular",Consolas,monospace;font-variant-numeric:tabular-nums;}
+  header{background:var(--maroon);color:#fff;padding:20px 28px;border-bottom:4px solid var(--gold);display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;}
+  header h1{margin:0 0 4px 0;font-size:21px;letter-spacing:.06em;}
+  header p{margin:0;color:#EAD9CF;font-size:12.5px;}
+  .savebadge{font-size:11px;color:#EAD9CF;}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 24px 60px;}
+  .maintabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;}
+  .maintab{padding:9px 18px;border-radius:6px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:12.5px;font-weight:700;color:var(--slate);}
+  .maintab.active{background:var(--maroon-dark);color:#fff;border-color:var(--maroon-dark);}
+  .maintab.hasalert::after{content:"•";color:var(--danger);margin-left:5px;font-size:16px;}
+  .daytabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;}
+  .daytab{padding:8px 16px;border-radius:5px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:var(--slate);text-align:left;}
+  .daytab.active{background:var(--maroon);color:#fff;border-color:var(--maroon);}
+  .daytab .n{display:block;font-size:9.5px;font-weight:400;opacity:.8;}
+  .daytab.hasgap{border-color:var(--danger);}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px 18px;margin-bottom:16px;position:relative;}
+  .card h2{font-size:12.5px;margin:0 0 10px 0;color:var(--maroon-dark);letter-spacing:.03em;}
+  .axis{display:grid;margin-left:230px;position:relative;height:20px;border-bottom:1px solid var(--line);margin-bottom:6px;}
+  .axis span{position:absolute;top:0;font-size:10px;color:#8a7d76;transform:translateX(-50%);}
+  .grp-label{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#8a7d76;margin:12px 0 4px 0;}
+  .row{display:flex;align-items:center;margin-bottom:6px;min-height:26px;}
+  .rlabel{width:230px;flex:none;font-size:12px;padding-right:10px;}
+  .rlabel b{display:block;font-size:12.5px;}
+  .rlabel span{font-size:10.5px;color:#8a7d76;}
+  .track{position:relative;flex:1;height:22px;background:#F3EEE6;border-radius:3px;}
+  .seg{position:absolute;top:0;height:100%;border-radius:3px;font-size:10.5px;color:#fff;display:flex;align-items:center;padding-left:6px;overflow:hidden;white-space:nowrap;cursor:pointer;border:1px solid transparent;}
+  .seg:hover{border-color:#fff;filter:brightness(1.08);}
+  .seg.cdl::after{content:"CDL";margin-left:6px;background:rgba(255,255,255,.25);padding:0 4px;border-radius:2px;font-size:8.5px;}
+  .ghost{border:1px dashed #C7973F;background:repeating-linear-gradient(45deg,#F7EFDD,#F7EFDD 6px,#FBF3E1 6px,#FBF3E1 12px);color:#8A6A2E;cursor:default;}
+  .seg.gap{background:var(--danger)!important;font-weight:700;}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:11px;color:#5c5350;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .legend i{width:10px;height:10px;border-radius:2px;display:inline-block;}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .relief-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px;}
+  .relief-item:last-child{border-bottom:none;}
+  .off{color:var(--danger);font-weight:600;}
+  .on{color:var(--teal);font-weight:600;}
+  .toggle{border:1px solid var(--line);background:#fff;border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:600;}
+  .fleet-chip{display:inline-block;background:#F3EEE6;border-radius:4px;padding:4px 9px;margin:3px 4px 3px 0;font-size:11.5px;}
+  .note{font-size:11.5px;color:#8a7d76;margin-top:2px;}
+  .notelist{margin:0;padding-left:18px;font-size:12px;}
+  .notelist li{margin-bottom:6px;}
+  .empty{font-size:12.5px;color:#8a7d76;font-style:italic;padding:10px 0;}
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;}
+  .stat{border-radius:6px;padding:14px 16px;}
+  .stat.danger{background:#FBEEEC;border:1px solid #E3B7AE;}
+  .stat.ok{background:#EEF6F1;border:1px solid #BFD8CE;}
+  .stat.info{background:#F3EEE6;border:1px solid var(--line);}
+  .stat b{display:block;font-size:24px;}
+  .stat.danger b{color:var(--danger);}
+  .stat.ok b{color:var(--teal);}
+  .stat.info b{color:var(--maroon-dark);}
+  .stat span{font-size:11px;color:#5c5350;}
+  .concern{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:5px;background:#FBEEEC;border:1px solid #E3B7AE;margin-bottom:8px;gap:10px;}
+  .concern .info{font-size:12.5px;}
+  .concern .info b{display:block;font-size:13px;color:var(--danger);}
+  .fixbtn{background:var(--maroon);color:#fff;border:none;padding:7px 14px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
+  .fixbtn:hover{background:var(--maroon-dark);}
+  .editor{position:fixed;z-index:50;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:14px;width:260px;}
+  .editor label{font-size:11px;color:#8a7d76;display:block;margin-bottom:4px;}
+  .editor input{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:5px;font-size:13px;margin-bottom:10px;}
+  .editor .btnrow{display:flex;gap:8px;justify-content:flex-end;}
+  .editor button{padding:6px 12px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:#fff;}
+  .editor button.save{background:var(--maroon);color:#fff;border-color:var(--maroon);}
+  .overlay{position:fixed;inset:0;z-index:49;background:transparent;}
+  table.grid{width:100%;border-collapse:collapse;font-size:12px;}
+  table.grid th{background:#F3EEE6;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#8a7d76;padding:7px 6px;text-align:left;border:1px solid var(--line);}
+  table.grid td{padding:4px 6px;border:1px solid var(--line);}
+  table.grid input, table.grid select{width:100%;padding:5px 6px;border:1px solid var(--line);border-radius:4px;font-size:12px;}
+  table.grid td.muted{color:#c8beb2;text-align:center;}
+  .form-row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px;align-items:end;}
+  .form-row div{display:flex;flex-direction:column;gap:3px;}
+  .form-row label{font-size:10.5px;color:#8a7d76;}
+  .form-row input,.form-row select{padding:7px 8px;border:1px solid var(--line);border-radius:5px;font-size:12.5px;}
+  .addbtn{background:var(--maroon);color:#fff;border:none;padding:8px 16px;border-radius:5px;font-size:12.5px;font-weight:600;cursor:pointer;height:34px;}
+  .delbtn{background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;}
+  .hrow{display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px;align-items:center;}
+  .hrow:last-child{border-bottom:none;}
+  .hrow.over{background:#FBEEEC;}
+  .badge{font-size:10px;background:var(--danger);color:#fff;padding:2px 7px;border-radius:10px;font-weight:700;}
+  .trip-item, .callout-item{padding:8px 10px;border-radius:5px;background:#F3EEE6;margin-bottom:6px;font-size:12px;}
+  .trip-item b, .callout-item b{color:var(--maroon-dark);}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+</head>
+<body>
+<header>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <img src="data:image/jpeg;base64,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" alt="BTS - Bulldog Transit System - Alabama A&M University" style="height:50px;width:50px;border-radius:50%;flex:none;object-fit:cover;border:2px solid #FAF7F2;">
+    <div>
+      <h1 class="display">BTS Schedule</h1>
+      <p style="margin:0 0 2px 0;color:#EAD9CF;font-size:12.5px;">Bulldog Transit System · Alabama A&amp;M University</p>
+      <p id="modeSubtitle" style="margin:0;color:#EAD9CF;font-size:12.5px;"></p>
+    </div>
+  </div>
+  <div class="savebadge" id="saveBadge"></div>
+</header>
+
+<div class="wrap">
+  <div class="maintabs" id="mainTabs"></div>
+  <div id="view-dashboard"></div>
+  <div id="view-schedule" style="display:none;"></div>
+  <div id="view-week" style="display:none;"></div>
+  <div id="view-lunch" style="display:none;"></div>
+  <div id="view-hours" style="display:none;"></div>
+  <div id="view-callouts" style="display:none;"></div>
+  <div id="view-trips" style="display:none;"></div>
+  <div id="view-staffing" style="display:none;"></div>
+  <div id="view-workforce" style="display:none;"></div>
+  <div id="view-lookup" style="display:none;"></div>
+</div>
+
+<script>
+  // ---- Firebase config: same project as the BTS Driver Log app ----
+  // Get these values from: Firebase console -> Project settings -> General ->
+  // "Your apps" -> the existing web app -> SDK setup and configuration.
+  const firebaseConfig = {
+    apiKey: "AIzaSyAAtag4wPxi0lGyXaqOIyIFoSBvNPMpZZg",
+    authDomain: "bts-driver-log.firebaseapp.com",
+    databaseURL: "https://bts-driver-log-default-rtdb.firebaseio.com",
+    projectId: "bts-driver-log",
+    storageBucket: "bts-driver-log.firebasestorage.app",
+    messagingSenderId: "203074744997",
+    appId: "1:203074744997:web:5e88ea17ed9c005ad1d34c"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  // window.storage-compatible shim: shared=true -> Firebase (under /schedule, a
+  // sibling path to the driver log's /data, so the two never collide), shared=false
+  // -> localStorage. The rest of the app calls window.storage.get/set exactly like
+  // it did with Claude's built-in storage, so nothing else needed to change.
+  window.storage = {
+    async get(key, shared){
+      if(!shared){
+        try{ const v = localStorage.getItem(key); return v!==null ? {key, value:v, shared:false} : null; }
+        catch(e){ return null; }
+      }
+      const snap = await db.ref('schedule/' + key).once('value');
+      const val = snap.val();
+      return val !== null ? {key, value: val, shared:true} : null;
+    },
+    async set(key, value, shared){
+      if(!shared){
+        try{ localStorage.setItem(key, value); return {key, value, shared:false}; }
+        catch(e){ return null; }
+      }
+      await db.ref('schedule/' + key).set(value);
+      return {key, value, shared:true};
+    },
+    async delete(key, shared){
+      if(!shared){ try{ localStorage.removeItem(key); }catch(e){} return {key, deleted:true, shared:false}; }
+      await db.ref('schedule/' + key).remove();
+      return {key, deleted:true, shared:true};
+    },
+    async list(prefix, shared){
+      if(!shared) return null; // not used by this app
+      const snap = await db.ref('schedule').once('value');
+      const all = snap.val() || {};
+      const keys = Object.keys(all).filter(k => !prefix || k.startsWith(prefix));
+      return {keys, prefix, shared:true};
+    }
+  };
+</script>
+<script>
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const STORAGE_KEY = "aamu-schedule-v2";
+
+// Maps this app's route names to the BTS Driver Log app's internal route keys,
+// so the two can be cross-referenced. On-campus routes use the driver app's
+// simplified EV flow (total passenger count on Post-Trip, no per-stop logging).
+const DRIVER_APP_ROUTE_KEY = {
+  "Dean": "dean",
+  "Waterleaf": "waterleaf",
+  "Constellation/Waterleaf/Dean": "combo",
+  "Huntsville Place": "huntsville",
+  "Elroy 1": "elroy1",
+  "Elroy 2": "elroy2",
+  "East Nights": "east_night",
+  "West Nights": "west_night",
+  "East WKND": "east_weekend",
+  "West WKND": "west_weekend",
+  "Drake": "drake",
+  "Bulldog 1": "bulldog",
+  "Normal Hills": "normal_hills",
+  "Paratransit": "paratransit",
+  "Paratransit Night": "paratransit_night"
+};
+// Fetches today's trip log straight from the Driver Log app's Firebase data
+// (path "data/bts-day-<date>", the same project, a sibling of this app's "schedule/" path).
+// Returns null on any failure (offline, placeholder config, no data yet) so callers
+// can fall back to estimates without crashing.
+async function fetchLiveRidershipToday(){
+  try{
+    const dateISO = WEEK[getTodayLabel()];
+    const snap = await db.ref('data/bts-day-' + dateISO).once('value');
+    const dayData = snap.val();
+    if(!dayData) return null;
+    const raw = typeof dayData === 'string' ? JSON.parse(dayData) : dayData;
+    const trips = raw.trips || [];
+    const byRouteKey = {};
+    trips.forEach(t=>{
+      if(!byRouteKey[t.route]) byRouteKey[t.route] = {going:0, coming:0, leftBehind:0, overflow:false, lastEvent:null};
+      const b = byRouteKey[t.route];
+      if(t.departAAMU){
+        b.going += t.departGoing||0; b.coming += t.departComing||0; b.leftBehind += t.departLeftBehind||0;
+        if(t.departOverflow) b.overflow = true;
+        if(!b.lastEvent || t.departAAMU > b.lastEvent) b.lastEvent = t.departAAMU;
+      }
+      (t.stops||[]).forEach(s=>{
+        b.going += s.going||0; b.coming += s.coming||0; b.leftBehind += s.leftBehind||0;
+        if(s.overflow) b.overflow = true;
+      });
+    });
+    return byRouteKey; // keyed by driver-app route key, e.g. "waterleaf"
+  }catch(e){
+    return null;
+  }
+}
+
+const DEFAULT_DATA = {
+  routes: [
+    {name:"Drake", cat:"On-Campus", vehicle:"AL-1", cdl:true, start:"7:00",end:"18:00",
+     days:{Mon:"Les",Tue:"Johnny",Wed:"Johnny",Thu:"Sullivan",Fri:"Sullivan"}},
+    {name:"Bulldog 1", cat:"On-Campus", vehicle:"AL-5 / 799", cdl:true, start:"7:00",end:"18:00",
+     days:{Mon:"Brandi"},
+     shifts2:{
+       Tue:[{start:"7:00",end:"12:00",driver:"Kevin"},{start:"12:00",end:"18:00",driver:"Patricia H"}],
+       Wed:[{start:"7:00",end:"12:00",driver:"Kevin"},{start:"12:00",end:"18:00",driver:"Patricia H"}],
+       Thu:[{start:"7:00",end:"12:00",driver:"Kevin"},{start:"12:00",end:"18:00",driver:"Patricia H"}],
+       Fri:[{start:"7:00",end:"12:00",driver:"Kevin"},{start:"12:00",end:"18:00",driver:"Patricia H"}]
+     }},
+    {name:"Paratransit", cat:"On-Campus", vehicle:"AL-2", cdl:true, start:"7:00",end:"18:00",
+     days:{Mon:"Samantha",Tue:"Samantha",Wed:"UNASSIGNED",Thu:"Charles",Fri:"Charles"}},
+    {name:"Normal Hills", cat:"On-Campus", vehicle:"Mini EV", cdl:true, start:"7:00",end:"18:00",
+     days:{Mon:"Sylvester",Tue:"Sylvester",Wed:"Ola",Thu:"Sylvester",Fri:"Sylvester"}},
+    {name:"Elroy 1", cat:"Off-Campus", vehicle:"Elroy 1 Shuttle", cdl:false, start:"7:00",end:"18:00",
+     days:{Mon:"Carla",Tue:"Les",Wed:"Carla",Thu:"Carla",Fri:"Carla"}},
+    {name:"Elroy 2", cat:"Off-Campus", vehicle:"Elroy 2 Shuttle", cdl:false, start:"7:00",end:"18:00",
+     days:{Mon:"Josh",Tue:"Ola",Wed:"Josh",Thu:"Josh",Fri:"Josh"}},
+    {name:"Huntsville Place", cat:"Off-Campus", vehicle:"HSV PL Shuttle", cdl:false, start:"7:00",end:"18:00",
+     days:{Mon:"Joe",Tue:"Joe",Wed:"Joe",Thu:"Les",Fri:"Joe"}},
+    {name:"Dean", cat:"Off-Campus", vehicle:"Dean Shuttle", cdl:false, start:"7:00",end:"18:00",
+     days:{Mon:"Donna",Tue:"Donna",Wed:"Donna",Thu:"Brandi",Fri:"Donna"}},
+    {name:"Waterleaf", cat:"Off-Campus", vehicle:"Waterleaf Shuttle", cdl:false, start:"7:00",end:"18:00",
+     days:{Mon:"Tammy",Tue:"Brandi",Wed:"Tammy",Thu:"Tammy",Fri:"Tammy"}},
+    {name:"Constellation/Waterleaf/Dean", cat:"Off-Campus", vehicle:"Constel/Water/Dean Shuttle", cdl:false, start:"7:00",end:"18:00",
+     days:{Mon:"Charles",Tue:"Charles",Wed:"Les",Thu:"Samantha",Fri:"Samantha"}},
+    {name:"Paratransit Night", cat:"Night", vehicle:"Sprinter (unassigned in Fleet data)", cdl:false, start:"18:00",end:"22:30",
+     days:{Mon:"LeDon",Tue:"LeDon",Wed:"LeDon",Thu:"LeDon"}},
+    {name:"East Nights", cat:"Night", vehicle:"Sprinter (unassigned in Fleet data)", cdl:false, start:"18:00",end:"22:30",
+     days:{Mon:"Wenona",Tue:"Wenona",Wed:"Patricia F",Thu:"Patricia F",Fri:"Patricia F"}},
+    {name:"West Nights", cat:"Night", vehicle:"Sprinter (unassigned in Fleet data)", cdl:false, start:"18:00",end:"22:30",
+     days:{Mon:"LaToya",Tue:"LaToya",Wed:"LaToya",Thu:"Diavian",Fri:"Nikita/Diavian/LeDon"}},
+    {name:"East WKND", cat:"Weekend", vehicle:"Sprinter (unassigned in Fleet data)", cdl:false, start:"7:30",end:"18:00",
+     days:{Sat:"Anthony",Sun:"Wenona"}},
+    {name:"West WKND", cat:"Weekend", vehicle:"Sprinter (unassigned in Fleet data)", cdl:false, start:"7:30",end:"18:00",
+     days:{Sat:"Reggie",Sun:"Reggie"}},
+  ],
+  optional: [
+    {name:"Auxiliary 1", start:"9:30", end:"14:00", note:"Optional — on hold, not enough daytime staff"},
+    {name:"Auxiliary 2", start:"9:30", end:"15:00", note:"Optional — on hold, not enough daytime staff"},
+  ],
+  relief: [
+    {name:"Off-Day Relief — Les", days:{Mon:true,Tue:true,Wed:true,Thu:true}},
+    {name:"Off-Day Relief — Brandi", days:{Mon:true,Tue:true,Wed:true,Thu:true}},
+    {name:"Lunch Relief — Marie", days:{Mon:true,Tue:true,Wed:true,Thu:true,Fri:true}},
+    {name:"Lunch Relief — Marion", days:{Mon:true,Tue:true,Wed:true,Thu:true,Fri:true}},
+  ],
+  callouts: [],
+  trips: []
+};
+
+let DATA = JSON.parse(JSON.stringify(DEFAULT_DATA));
+function applyLunchDefaults(dataObj){
+  dataObj.routes.forEach(r=>{
+    const dur = toMin(r.end) - toMin(r.start);
+    if(dur > 480){
+      if(!r.lunch) r.lunch = {};
+      ["Mon","Tue","Wed","Thu","Fri"].forEach(d=>{
+        if(r.days[d] !== undefined && !r.lunch[d]) r.lunch[d] = {time:"12:00", driver:""};
+      });
+    }
+  });
+}
+applyLunchDefaults(DATA);
+
+const DEFAULT_STAFFING = {
+  "Les":       {employment:"Full-Time", cdl:true, availability:"Standard full-time schedule", training:["E-Bus","Mini EV","Motor Coach"]},
+  "Brandi":    {employment:"Full-Time", cdl:true, availability:"Standard full-time schedule", training:["E-Bus","Mini EV"]},
+  "Samantha":  {employment:"Full-Time", cdl:true, availability:"Standard full-time schedule", training:["E-Bus","Mini EV"]},
+  "Charles":   {employment:"Full-Time", cdl:true, availability:"Standard full-time schedule", training:["E-Bus","Mini EV","Motor Coach"]},
+  "Sylvester": {employment:"Full-Time", cdl:true, availability:"Standard full-time schedule", training:["E-Bus","Mini EV","Motor Coach"]},
+  "Carla":     {employment:"Full-Time", cdl:true, availability:"Standard full-time schedule", training:["E-Bus","Mini EV","Motor Coach"]},
+  "Josh":      {employment:"Full-Time", cdl:true, availability:"Standard full-time schedule", training:["E-Bus","Mini EV"]},
+  "Joe":       {employment:"Full-Time", cdl:true, availability:"Standard full-time schedule", training:["E-Bus","Mini EV"]},
+  "Donna":     {employment:"Full-Time", cdl:true, availability:"Standard full-time schedule", training:["E-Bus","Mini EV","Motor Coach"]},
+  "Tammy":     {employment:"Full-Time", cdl:true, availability:"Standard full-time schedule", training:["E-Bus","Mini EV"]},
+
+  "Patricia H": {employment:"Part-Time", cdl:true,  availability:"Mon–Fri, 11AM–6PM", training:["E-Bus","Mini EV","Motor Coach"]},
+  "Reggie":     {employment:"Part-Time", cdl:false, availability:"Weekends only", training:[]},
+  "Johnny":     {employment:"Part-Time", cdl:true,  availability:"20–25 hours/week", training:["E-Bus","Mini EV"]},
+  "Sullivan":   {employment:"Part-Time", cdl:true,  availability:"2 days a week", training:["E-Bus","Mini EV","Motor Coach"]},
+  "Kevin":      {employment:"Part-Time", cdl:true,  availability:"Mon–Fri, 7AM–12PM", training:["E-Bus","Mini EV"]},
+  "Ola":        {employment:"Part-Time", cdl:true,  availability:"Monday–Friday", training:["Mini EV"]},
+  "Wenona":     {employment:"Part-Time", cdl:false, availability:"After 6:00 PM", training:[]},
+  "LeDon":      {employment:"Part-Time", cdl:false, availability:"After 6:00 PM", training:[]},
+  "Patricia F": {employment:"Part-Time", cdl:false, availability:"After 6:00 PM", training:[]},
+  "LaToya":     {employment:"Part-Time", cdl:false, availability:"After 6:00 PM", training:[]},
+  "Anthony":    {employment:"Part-Time", cdl:true,  availability:"Weekends only", training:["E-Bus","Mini EV"]},
+  "Diavian":    {employment:"Part-Time", cdl:false, availability:"After 6:00 PM", training:[]},
+  "Nikita":     {employment:"Part-Time", cdl:true,  availability:"9AM–1PM Mon–Fri, or Friday evening after 5PM", training:[]},
+  "Marie":      {employment:"Part-Time", cdl:true,  availability:"Not available weekends or evenings", training:["E-Bus","Mini EV"]},
+  "Marion":     {employment:"Part-Time", cdl:true,  availability:"Not available weekends or evenings", training:["E-Bus","Mini EV"]}
+};
+function getRoster(){
+  const ft=[], pt=[];
+  Object.keys(DATA.staffing).forEach(name=>{
+    (DATA.staffing[name].employment==="Full-Time" ? ft : pt).push(name);
+  });
+  ft.sort(); pt.sort();
+  return {fullTime:ft, partTime:pt};
+}
+const RENAME_MAP = {
+  "Brandi P":"Brandi", "Kevin H":"Kevin", "LaToya Hives":"LaToya",
+  "Nikita Harris":"Nikita", "Diavionna Bodie":"Diavian", "Diavionna":"Diavian"
+};
+function renameDriverString(v){
+  if(!v || v==="UNASSIGNED") return v;
+  return v.split('/').map(n=>{ const t=n.trim(); return RENAME_MAP[t] || t; }).join('/');
+}
+function driverOptionsHTML(selected){
+  const roster = getRoster();
+  let html = `<option value="" ${!selected?'selected':''}>— Unassigned —</option>`;
+  html += `<optgroup label="Full-Time">` + roster.fullTime.map(n=>`<option value="${n}" ${n===selected?'selected':''}>${n}</option>`).join('') + `</optgroup>`;
+  html += `<optgroup label="Part-Time">` + roster.partTime.map(n=>`<option value="${n}" ${n===selected?'selected':''}>${n}</option>`).join('') + `</optgroup>`;
+  return html;
+}
+function driverMultiOptionsHTML(selectedArr){
+  const roster = getRoster();
+  const sel = selectedArr || [];
+  let html = `<optgroup label="Full-Time">` + roster.fullTime.map(n=>`<option value="${n}" ${sel.includes(n)?'selected':''}>${n}</option>`).join('') + `</optgroup>`;
+  html += `<optgroup label="Part-Time">` + roster.partTime.map(n=>`<option value="${n}" ${sel.includes(n)?'selected':''}>${n}</option>`).join('') + `</optgroup>`;
+  return html;
+}
+
+const AVAILABILITY = {
+  "Wenona": {after:"18:00", notFriday:true},
+  "LeDon": {after:"18:00"},
+  "Patricia F": {after:"18:00"},
+  "LaToya": {after:"18:00", notFriday:true},
+  "Diavian": {after:"18:00"},
+  "Anthony": {weekendOnly:true},
+  "Reggie": {weekendOnly:true, notFriday:true},
+  "Johnny": {notFriday:true},
+  "Patricia H": {weekdayOnly:true},
+  "Kevin": {weekdayOnly:true},
+  "Ola": {weekdayOnly:true},
+  "Marie": {weekdayOnly:true},
+  "Marion": {weekdayOnly:true}
+};
+
+function migrateData(d){
+  d.routes = d.routes.filter(r=>{
+    if(r.name==="Bulldog 2") return false;
+    if(r.name==="Bulldog 1" && !r.shifts2) return false;
+    return true;
+  });
+  if(!d.routes.some(r=>r.name==="Bulldog 1")){
+    const fresh = JSON.parse(JSON.stringify(DEFAULT_DATA.routes.find(r=>r.name==="Bulldog 1")));
+    d.routes.splice(1, 0, fresh);
+  }
+  d.routes.forEach(r=>{
+    if(r.days) Object.keys(r.days).forEach(day=>{ r.days[day] = renameDriverString(r.days[day]); });
+    if(r.shifts2) Object.values(r.shifts2).forEach(arr=>arr.forEach(s=>{ s.driver = renameDriverString(s.driver); }));
+    if(r.lunch) Object.values(r.lunch).forEach(l=>{ l.driver = renameDriverString(l.driver); });
+  });
+  d.relief.forEach(rel=>{
+    if(rel.name.startsWith("Off-Day Relief") && rel.days.Fri !== undefined) delete rel.days.Fri;
+    rel.name = rel.name.replace("Brandi P","Brandi");
+  });
+  if(!d.callouts) d.callouts=[];
+  if(!d.trips) d.trips=[];
+  d.trips.forEach(t=>{
+    if(!t.status) t.status="Pending";
+    if(!Array.isArray(t.drivers)) t.drivers = t.drivers ? [t.drivers] : [];
+    t.drivers = t.drivers.map(renameDriverString).filter(Boolean);
+  });
+  d.callouts.forEach(c=>{ c.driver = renameDriverString(c.driver); if(c.replacement) c.replacement = renameDriverString(c.replacement); });
+  if(!d.history) d.history={};
+  if(!d.weekOverrides) d.weekOverrides={};
+  if(!d.staffing) d.staffing = {};
+  Object.keys(DEFAULT_STAFFING).forEach(name=>{
+    if(!d.staffing[name]) d.staffing[name] = JSON.parse(JSON.stringify(DEFAULT_STAFFING[name]));
+  });
+  applyLunchDefaults(d);
+}
+migrateData(DATA);
+
+const CAT_COLOR = {"On-Campus":"#2F6E62","Off-Campus":"#55504A","Night":"#6E1E2C","Weekend":"#C7973F","Trip":"#3E6B8A"};
+let currentDay = "Mon";
+let currentView = "dashboard";
+const OT_LIMIT = 40;
+const READ_ONLY = new URLSearchParams(window.location.search).get('view') === 'team'; // ?view=team = view-only link
+
+function toMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
+function label(t){
+  let [h,m]=t.split(':').map(Number);
+  const ap=h>=12?'PM':'AM'; let h12=h%12; if(h12===0)h12=12;
+  return `${h12}:${m.toString().padStart(2,'0')}${ap}`;
+}
+function isoDate(d){ const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
+function statusColor(s){ return s==="Completed"?"#2F6E62":s==="Cancelled"?"#8a7d76":"#C7973F"; }
+function tripDriversLabel(t){ return (t.drivers && t.drivers.length) ? t.drivers.join(', ') : 'Driver TBD'; }
+function fmtDate(iso){ const [y,m,d]=iso.split('-').map(Number); const dt=new Date(y,m-1,d); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+function getWeekDates(){
+  const now = new Date();
+  const dow = now.getDay();
+  const diffToMonday = (dow===0? -6 : 1-dow);
+  const monday = new Date(now.getFullYear(),now.getMonth(),now.getDate()+diffToMonday);
+  const map = {};
+  DAYS.forEach((d,i)=>{ const dt=new Date(monday.getFullYear(),monday.getMonth(),monday.getDate()+i); map[d]=isoDate(dt); });
+  return map;
+}
+const WEEK = getWeekDates();
+function mondayISOFrom(dateStr){
+  const [y,m,dd] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m-1, dd);
+  const dow = dt.getDay();
+  const diff = dow===0 ? -6 : 1-dow;
+  const mon = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()+diff);
+  return isoDate(mon);
+}
+function weekDatesFromMonday(mondayISOStr){
+  const [y,m,dd] = mondayISOStr.split('-').map(Number);
+  const mon = new Date(y, m-1, dd);
+  const map = {};
+  DAYS.forEach((d,i)=>{ const dt=new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+i); map[d]=isoDate(dt); });
+  return map;
+}
+function getTodayLabel(){ const dow=new Date().getDay(); return DAYS[dow===0?6:dow-1]; }
+function getAllDriverNames(){
+  const set = new Set();
+  DATA.routes.forEach(r=>{
+    Object.values(r.days||{}).forEach(v=>{ if(v && v!=="UNASSIGNED") v.split('/').forEach(n=>set.add(n.trim())); });
+    if(r.shifts2){ Object.values(r.shifts2).forEach(arr=>arr.forEach(s=>{ if(s.driver && s.driver!=="UNASSIGNED") set.add(s.driver.trim()); })); }
+    if(r.lunch){ Object.values(r.lunch).forEach(l=>{ if(l.driver) set.add(l.driver.trim()); }); }
+  });
+  DATA.relief.forEach(rel=>{
+    const parts = rel.name.split('—'); const person = parts[parts.length-1].trim();
+    if(person) set.add(person);
+  });
+  return [...set].sort();
+}
+function getAssignedOn(dayLabel){
+  const set = new Set();
+  DATA.routes.forEach(r=>{
+    const v = r.days ? r.days[dayLabel] : undefined;
+    if(v && v!=="UNASSIGNED") v.split('/').forEach(n=>set.add(n.trim()));
+    if(r.shifts2 && r.shifts2[dayLabel]) r.shifts2[dayLabel].forEach(s=>{ if(s.driver && s.driver!=="UNASSIGNED") set.add(s.driver.trim()); });
+    if(r.lunch && r.lunch[dayLabel] && r.lunch[dayLabel].driver) set.add(r.lunch[dayLabel].driver.trim());
+  });
+  DATA.relief.forEach(rel=>{
+    if(rel.days[dayLabel]){ const parts=rel.name.split('—'); const person=parts[parts.length-1].trim(); if(person) set.add(person); }
+  });
+  return set;
+}
+
+// ---------- persistence ----------
+function snapshotToday(){
+  const day = getTodayLabel();
+  const dateISO = WEEK[day];
+  const snap = {};
+  DATA.routes.forEach(r=>{
+    if(r.shifts2 && r.shifts2[day]){
+      r.shifts2[day].forEach((s,si)=>{ snap[`${r.name} (${si===0?'AM':'PM'})`] = s.driver; });
+    } else if(r.days && r.days[day]!==undefined){
+      snap[r.name] = r.days[day];
+    }
+  });
+  DATA.relief.forEach(rel=>{
+    if(rel.days[day]!==undefined) snap[rel.name] = rel.days[day] ? "On duty" : "Not covered";
+  });
+  if(!DATA.history) DATA.history = {};
+  DATA.history[dateISO] = snap;
+}
+async function loadData(){
+  try{
+    const res = await window.storage.get(STORAGE_KEY, true);
+    if(res && res.value){
+      const loaded = JSON.parse(res.value);
+      DATA = Object.assign({}, DEFAULT_DATA, loaded);
+      migrateData(DATA);
+    }
+  }catch(e){ /* use defaults */ }
+  snapshotToday();
+  buildTabs();
+  renderAll();
+}
+async function saveData(){
+  snapshotToday();
+  const badge = document.getElementById('saveBadge');
+  try{
+    await window.storage.set(STORAGE_KEY, JSON.stringify(DATA), true);
+    badge.textContent = "Saved · shared with anyone using this schedule";
+  }catch(e){
+    badge.textContent = "Not saved permanently here — changes last for this session only";
+  }
+  setTimeout(()=>{ if(badge) badge.textContent=""; }, 4000);
+}
+
+// ---------- derived data ----------
+function getWeeklyDemandHours(){
+  let total = 0;
+  DATA.routes.forEach(r=>{
+    Object.keys(r.days).forEach(()=>{ total += (toMin(r.end)-toMin(r.start))/60; });
+    if(r.shifts2) Object.values(r.shifts2).forEach(arr=>arr.forEach(s=>{ total += (toMin(s.end)-toMin(s.start))/60; }));
+  });
+  return total;
+}
+function getDriverHours(){
+  const totals = {};
+  DATA.relief.forEach(rel=>{
+    const parts = rel.name.split('—'); const person = parts[parts.length-1].trim();
+    if(person) totals[person] = totals[person] || 0;
+  });
+  DATA.routes.forEach(r=>{
+    const shiftMin = toMin(r.end) - toMin(r.start);
+    Object.keys(r.days).forEach(day=>{
+      const val = r.days[day];
+      if(!val || val==="UNASSIGNED") return;
+      let mins = shiftMin;
+      let lunchDriver = null;
+      if(r.lunch && r.lunch[day]){
+        mins -= 60;
+        if(r.lunch[day].driver) lunchDriver = r.lunch[day].driver;
+      }
+      const names = val.split('/').map(s=>s.trim()).filter(Boolean);
+      const share = mins / names.length;
+      names.forEach(n=>{ totals[n] = (totals[n]||0) + share; });
+      if(lunchDriver){ totals[lunchDriver] = (totals[lunchDriver]||0) + 60; }
+    });
+    if(r.shifts2){
+      Object.keys(r.shifts2).forEach(day=>{
+        r.shifts2[day].forEach(s=>{
+          if(!s.driver || s.driver==="UNASSIGNED") return;
+          const mins = toMin(s.end) - toMin(s.start);
+          const names = s.driver.split('/').map(x=>x.trim()).filter(Boolean);
+          const share = mins / names.length;
+          names.forEach(n=>{ totals[n] = (totals[n]||0) + share; });
+        });
+      });
+    }
+  });
+  return Object.entries(totals).map(([name,min])=>({name, hours: min/60})).sort((a,b)=>b.hours-a.hours);
+}
+function getConcerns(){
+  const list = [];
+  DATA.routes.forEach(r=>{
+    Object.keys(r.days).forEach(day=>{
+      if(r.days[day] === "UNASSIGNED"){
+        list.push({type:"Unassigned shift", day, detail:`${r.name} (${r.vehicle}) has no driver on ${day}.`,
+          action:()=>{ currentDay=day; showView('schedule'); flashRoute(r.name, day); }});
+      }
+    });
+    if(r.shifts2){
+      Object.keys(r.shifts2).forEach(day=>{
+        r.shifts2[day].forEach((s,si)=>{
+          if(s.driver === "UNASSIGNED"){
+            list.push({type:"Unassigned shift", day, detail:`${r.name} (${label(s.start)}–${label(s.end)}) has no driver on ${day}.`,
+              action:()=>{ currentDay=day; showView('schedule'); flashRoute(r.name, day); }});
+          }
+        });
+      });
+    }
+  });
+  DATA.relief.forEach(rel=>{
+    Object.keys(rel.days).forEach(day=>{
+      if(rel.days[day] === false){
+        list.push({type:"Relief gap", day, detail:`${rel.name} is not covered on ${day}.`,
+          action:()=>{ currentDay=day; showView('schedule'); }});
+      }
+    });
+  });
+  getDriverHours().forEach(h=>{
+    if(h.hours > OT_LIMIT){
+      list.push({type:"Overtime", day:null, detail:`${h.name} is scheduled ${h.hours.toFixed(1)} hrs this week (over ${OT_LIMIT}).`,
+        action:()=>{ showView('hours'); }});
+    }
+  });
+  return list;
+}
+function flashRoute(routeName, day){
+  setTimeout(()=>{
+    const target = document.querySelector(`[data-route="${CSS.escape(routeName)}"][data-day="${day}"]`);
+    if(target){ target.scrollIntoView({behavior:'smooth', block:'center'}); target.style.outline='3px solid #C7973F'; }
+  }, 60);
+}
+
+// ---------- tabs ----------
+function buildTabs(){
+  const el = document.getElementById('mainTabs');
+  el.innerHTML = '';
+  const scheduleConcern = getConcerns().some(c=>c.type==="Unassigned shift" || c.type==="Relief gap");
+  const overtimeConcern = getDriverHours().some(h=>h.hours>OT_LIMIT);
+  const dashboardConcern = getConcerns().length>0;
+
+  function makeSimpleTab(id, label, active, dot, onClick){
+    const btn = document.createElement('button');
+    btn.className = 'maintab' + (active?' active':'') + (dot?' hasalert':'');
+    btn.textContent = label;
+    btn.onclick = onClick;
+    el.appendChild(btn);
+  }
+  function makeDropdown(groupId, label, dot, active, children){
+    const wrap = document.createElement('div'); wrap.style.position='relative'; wrap.style.display='inline-block';
+    const btn = document.createElement('button');
+    btn.className = 'maintab' + (active?' active':'') + (dot?' hasalert':'');
+    btn.textContent = label + ' ▾';
+    btn.onclick = (e)=>{ e.stopPropagation(); toggleDropdown(groupId); };
+    wrap.appendChild(btn);
+    const menu = document.createElement('div'); menu.id='dropdown-'+groupId;
+    menu.style.cssText = 'display:none;position:absolute;top:100%;left:0;background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:60;min-width:170px;margin-top:4px;overflow:hidden;';
+    children.forEach(([cid,clabel])=>{
+      const item = document.createElement('button');
+      item.textContent = clabel;
+      item.style.cssText = 'display:block;width:100%;text-align:left;padding:9px 14px;border:none;background:#fff;font-size:12.5px;cursor:pointer;color:#55504A;';
+      if(cid===currentView) item.style.cssText += 'background:#F3EEE6;font-weight:700;color:#4A1420;';
+      item.onmouseenter=()=>{ if(cid!==currentView) item.style.background='#FBF7F0'; };
+      item.onmouseleave=()=>{ if(cid!==currentView) item.style.background='#fff'; };
+      item.onclick=()=>{ closeAllDropdowns(); showView(cid); };
+      menu.appendChild(item);
+    });
+    wrap.appendChild(menu);
+    el.appendChild(wrap);
+  }
+
+  makeSimpleTab('dashboard','Dashboard', currentView==='dashboard', dashboardConcern, ()=>showView('dashboard'));
+  makeSimpleTab('schedulegroup','Schedule', currentView==='week'||currentView==='schedule'||currentView==='lunch', scheduleConcern,
+    ()=>showView(scheduleSubTab==='week' ? 'week' : scheduleSubTab==='lunch' ? 'lunch' : 'schedule'));
+  makeDropdown('staffinggroup','Staffing', overtimeConcern, ['staffing','workforce','hours'].includes(currentView),
+    [['staffing','Driver Roster'],['workforce','Workforce'],['hours','Driver Hours']]);
+  makeSimpleTab('trips','Trips', currentView==='trips', false, ()=>showView('trips'));
+  makeDropdown('recordsgroup','Records', false, ['lookup','callouts'].includes(currentView),
+    [['lookup','Look Up'],['callouts','Call-Outs']]);
+}
+function toggleDropdown(groupId){
+  const isOpen = document.getElementById('dropdown-'+groupId).style.display === 'block';
+  closeAllDropdowns();
+  if(!isOpen) document.getElementById('dropdown-'+groupId).style.display = 'block';
+}
+function closeAllDropdowns(){
+  document.querySelectorAll('[id^="dropdown-"]').forEach(m=>m.style.display='none');
+}
+document.addEventListener('click', closeAllDropdowns);
+
+function showView(view){
+  currentView = view;
+  if(view==='week' || view==='schedule' || view==='lunch') scheduleSubTab = (view==='week' || view==='lunch') ? view : currentDay;
+  ['dashboard','schedule','week','lunch','hours','callouts','trips','staffing','workforce','lookup'].forEach(v=>{
+    const viewEl = document.getElementById('view-'+v);
+    if(viewEl) viewEl.style.display = (v===view) ? '' : 'none';
+  });
+  renderAll();
+}
+function renderAll(){
+  buildTabs();
+  if(currentView==='dashboard') renderDashboard();
+  else if(currentView==='schedule') renderSchedule();
+  else if(currentView==='week') renderWeek();
+  else if(currentView==='lunch') renderLunch();
+  else if(currentView==='hours') renderHours();
+  else if(currentView==='callouts') renderCallouts();
+  else if(currentView==='trips') renderTrips();
+  else if(currentView==='staffing') renderStaffing();
+  else if(currentView==='workforce') renderWorkforce();
+  else if(currentView==='lookup') renderLookup();
+  if(READ_ONLY) lockReadOnly();
+}
+function lockReadOnly(){
+  // Look Up's search fields and Workforce's what-if calculator stay active — everything that mutates data gets locked.
+  ['view-dashboard','view-week','view-lunch','view-schedule','view-hours','view-callouts','view-trips','view-staffing'].forEach(id=>{
+    const container = document.getElementById(id);
+    if(!container) return;
+    container.querySelectorAll('select, input').forEach(el=>{ el.disabled = true; });
+    container.querySelectorAll('.addbtn, .delbtn, .toggle').forEach(el=>{ el.style.display='none'; });
+  });
+}
+
+// ---------- dashboard ----------
+function renderDashboard(){
+  const el = document.getElementById('view-dashboard');
+  const concerns = getConcerns();
+  const totalShifts = DATA.routes.reduce((n,r)=>n+Object.keys(r.days).length+(r.shifts2?Object.values(r.shifts2).reduce((m,arr)=>m+arr.length,0):0),0);
+  const tripsThisWeek = DATA.trips.filter(t=>Object.values(WEEK).includes(t.date)).sort((a,b)=>a.date.localeCompare(b.date));
+  const recentCallouts = [...DATA.callouts].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+
+  el.innerHTML = '';
+  const stats = document.createElement('div'); stats.className='stat-grid';
+  stats.innerHTML = `
+    <div class="stat ${concerns.length? 'danger':'ok'}"><b>${concerns.length}</b><span>Area${concerns.length!==1?'s':''} of concern</span></div>
+    <div class="stat info"><b>${DATA.routes.length}</b><span>Fixed routes tracked</span></div>
+    <div class="stat info"><b>${totalShifts}</b><span>Total weekly shifts</span></div>
+    <div class="stat ${tripsThisWeek.length?'info':'ok'}"><b>${tripsThisWeek.length}</b><span>Trip request${tripsThisWeek.length!==1?'s':''} this week</span></div>`;
+  el.appendChild(stats);
+
+  const liveCard = document.createElement('div'); liveCard.className='card';
+  liveCard.innerHTML = `<h2 class="display">Live Ridership Today</h2><div class="empty">Loading from the driver log&hellip;</div>`;
+  el.appendChild(liveCard);
+  fetchLiveRidershipToday().then(byRouteKey=>{
+    if(!byRouteKey){
+      liveCard.innerHTML = `<h2 class="display">Live Ridership Today</h2><div class="empty">No live data yet today — either no trips logged, or the driver log connection isn't set up. Route hours elsewhere still use planning estimates.</div>`;
+      return;
+    }
+    const SIMPLIFIED_ROUTE_KEYS = ["drake","bulldog","normal_hills","paratransit","paratransit_night"];
+    const rows = Object.entries(DRIVER_APP_ROUTE_KEY).filter(([name,key])=>key && byRouteKey[key] && !SIMPLIFIED_ROUTE_KEYS.includes(key));
+    if(rows.length===0){
+      liveCard.innerHTML = `<h2 class="display">Live Ridership Today</h2><div class="empty">No trips logged yet today.</div>`;
+      return;
+    }
+    liveCard.innerHTML = `<h2 class="display">Live Ridership Today</h2>` + rows.map(([name,key])=>{
+      const b = byRouteKey[key];
+      const total = b.going + b.coming;
+      return `<div class="hrow${b.overflow?' over':''}"><span>${name}</span><span class="mono">${total} riders${b.leftBehind?` · <span style="color:var(--danger);font-weight:700;">${b.leftBehind} left behind</span>`:''}${b.overflow?' <span class="badge">OVERFLOW</span>':''}</span></div>`;
+    }).join('') + `<p class="note" style="margin-top:8px;">From the BTS Driver Log, updated on page load. On-campus/EV routes (Drake, Bulldog, Normal Hills, Paratransit, Paratransit Night) report a single total-passenger count per shift instead of per-stop counts, and aren't reflected here yet.</p>`;
+  });
+
+  const card = document.createElement('div'); card.className='card';
+  card.innerHTML = `<h2 class="display">Areas of concern</h2>`;
+  if(concerns.length===0){
+    const ok=document.createElement('div'); ok.className='empty'; ok.textContent='No unassigned shifts, relief gaps, or overtime right now.';
+    card.appendChild(ok);
+  } else {
+    concerns.forEach(c=>{
+      const row=document.createElement('div'); row.className='concern';
+      row.innerHTML = `<div class="info"><b>${c.type}${c.day? ' — '+c.day:''}</b>${c.detail}</div>`;
+      const btn=document.createElement('button'); btn.className='fixbtn'; btn.textContent='Fix now';
+      btn.onclick = c.action;
+      row.appendChild(btn); card.appendChild(row);
+    });
+  }
+  el.appendChild(card);
+
+  const split = document.createElement('div'); split.className='split';
+  const tripsCard = document.createElement('div'); tripsCard.className='card';
+  tripsCard.innerHTML = `<h2 class="display">Trip requests this week</h2>`;
+  if(tripsThisWeek.length===0){
+    tripsCard.innerHTML += `<div class="empty">No trips scheduled this week.</div>`;
+  } else {
+    tripsThisWeek.forEach(t=>{
+      const div=document.createElement('div'); div.className='trip-item';
+      div.innerHTML = `<b>${fmtDate(t.date)}</b> — ${t.pickup} → ${t.destination} <span style="color:${statusColor(t.status)};font-weight:700;">(${t.status})</span><br>${label(t.departure)}–${label(t.return)} · Driver(s): ${tripDriversLabel(t)}`;
+      tripsCard.appendChild(div);
+    });
+  }
+  split.appendChild(tripsCard);
+
+  const coCard = document.createElement('div'); coCard.className='card';
+  coCard.innerHTML = `<h2 class="display">Recent call-outs</h2>`;
+  if(recentCallouts.length===0){
+    coCard.innerHTML += `<div class="empty">No call-outs logged.</div>`;
+  } else {
+    recentCallouts.forEach(c=>{
+      const div=document.createElement('div'); div.className='callout-item';
+      div.innerHTML = `<b>${fmtDate(c.date)}</b> — ${c.driver} (${c.reason})${c.route? ' · '+c.route:''}`;
+      coCard.appendChild(div);
+    });
+  }
+  split.appendChild(coCard);
+  el.appendChild(split);
+
+  // ---- available drivers today (bottom of the dashboard) ----
+  const today = new Date();
+  const todayLabel = getTodayLabel();
+  const todayISO = WEEK[todayLabel];
+  const roster = getRoster();
+  const allDrivers = [...roster.fullTime, ...roster.partTime];
+  const assignedToday = getAssignedOn(todayLabel);
+  const calledOutToday = new Set(DATA.callouts.filter(c=>c.date===todayISO).map(c=>c.driver));
+  const isWeekend = (todayLabel==="Sat" || todayLabel==="Sun");
+  const availableToday = allDrivers.filter(n=>{
+    if(assignedToday.has(n)) return false;
+    if(calledOutToday.has(n)) return false;
+    const av = AVAILABILITY[n];
+    if(av){
+      if(av.weekendOnly && !isWeekend) return false;
+      if(av.notFriday && todayLabel==="Fri") return false;
+      if(av.weekdayOnly && isWeekend) return false;
+    }
+    return true;
+  });
+
+  const dateCard = document.createElement('div'); dateCard.className='card';
+  dateCard.innerHTML = `<h2 class="display">Today — ${today.toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric', year:'numeric'})}</h2>
+    <p class="note">Drivers with no shift, lunch relief, or off-day relief duty scheduled today — a starting list to call if someone phones in sick. Anyone already called out today is left off this list. Availability windows are factored in; this still only reflects the master schedule, not anything outside it, so double-check before calling.</p>`;
+  if(availableToday.length===0){
+    dateCard.innerHTML += `<div class="empty">No one is available today given current shifts and availability windows.</div>`;
+  } else {
+    availableToday.forEach(n=>{
+      const isFT = roster.fullTime.includes(n);
+      const av = AVAILABILITY[n];
+      const info = DATA.staffing[n];
+      let note;
+      if(isFT){ note = "Schedule off"; }
+      else { note = av && av.after ? `Available after ${label(av.after)}` : "Available"; }
+      const div=document.createElement('div'); div.className='hrow'; div.style.flexDirection='column'; div.style.alignItems='stretch';
+      const showNote = !isFT && info && info.availability;
+      const noteColor = isFT ? '#C7973F' : '#2F6E62';
+      div.innerHTML = `<div style="display:flex;justify-content:space-between;"><span>${n}</span><span style="font-weight:600;color:${noteColor};">${note}</span></div>${showNote?`<span class="note">${info.availability}</span>`:''}`;
+      dateCard.appendChild(div);
+    });
+  }
+  el.appendChild(dateCard);
+}
+
+
+// ---------- schedule (single day) ----------
+function openEditor(routeIdx, day, anchorEl){
+  closeEditor();
+  const r = DATA.routes[routeIdx];
+  const rect = anchorEl.getBoundingClientRect();
+  const overlay=document.createElement('div'); overlay.className='overlay'; overlay.id='editorOverlay'; overlay.onclick=closeEditor;
+  document.body.appendChild(overlay);
+  const box=document.createElement('div'); box.className='editor'; box.id='editorBox';
+  box.style.top = Math.min(rect.bottom+8, window.innerHeight-160)+'px';
+  box.style.left = Math.min(rect.left, window.innerWidth-280)+'px';
+  const currentVal = r.days[day]==="UNASSIGNED" ? "" : r.days[day];
+  box.innerHTML = `<label>${r.name} — ${day}</label>
+    <select id="editorInput">${driverOptionsHTML(currentVal)}</select>
+    <div class="btnrow"><button id="editorCancel">Cancel</button><button class="save" id="editorSave">Save</button></div>`;
+  document.body.appendChild(box);
+  const input=document.getElementById('editorInput'); input.focus();
+  document.getElementById('editorCancel').onclick = closeEditor;
+  document.getElementById('editorSave').onclick = ()=>{
+    const val = input.value.trim();
+    r.days[day] = val===""?"UNASSIGNED":val;
+    closeEditor(); renderAll(); saveData();
+  };
+  input.addEventListener('keydown', e=>{ if(e.key==='Escape') closeEditor(); });
+}
+function closeEditor(){
+  const b=document.getElementById('editorBox'); if(b)b.remove();
+  const o=document.getElementById('editorOverlay'); if(o)o.remove();
+}
+function openShiftEditor(r, day, shiftIdx, anchorEl){
+  closeEditor();
+  const s = r.shifts2[day][shiftIdx];
+  const rect = anchorEl.getBoundingClientRect();
+  const overlay=document.createElement('div'); overlay.className='overlay'; overlay.id='editorOverlay'; overlay.onclick=closeEditor;
+  document.body.appendChild(overlay);
+  const box=document.createElement('div'); box.className='editor'; box.id='editorBox';
+  box.style.top = Math.min(rect.bottom+8, window.innerHeight-160)+'px';
+  box.style.left = Math.min(rect.left, window.innerWidth-280)+'px';
+  const currentVal = s.driver==="UNASSIGNED" ? "" : s.driver;
+  box.innerHTML = `<label>${r.name} — ${day} (${label(s.start)}–${label(s.end)})</label>
+    <select id="editorInput">${driverOptionsHTML(currentVal)}</select>
+    <div class="btnrow"><button id="editorCancel">Cancel</button><button class="save" id="editorSave">Save</button></div>`;
+  document.body.appendChild(box);
+  const input=document.getElementById('editorInput'); input.focus();
+  document.getElementById('editorCancel').onclick = closeEditor;
+  document.getElementById('editorSave').onclick = ()=>{
+    const val = input.value.trim();
+    s.driver = val===""?"UNASSIGNED":val;
+    closeEditor(); renderAll(); saveData();
+  };
+  input.addEventListener('keydown', e=>{ if(e.key==='Escape') closeEditor(); });
+}
+
+function routeActiveOn(r,d){ return !!r.days[d] || !!(r.shifts2 && r.shifts2[d]); }
+let scheduleSubTab = 'week';
+function renderScheduleSubNav(activeKey){
+  const wrap = document.createElement('div'); wrap.className='daytabs';
+  const weekBtn = document.createElement('button');
+  weekBtn.className = 'daytab' + (activeKey==='week' ? ' active':'');
+  weekBtn.textContent = 'Week';
+  weekBtn.onclick = ()=>{ scheduleSubTab='week'; showView('week'); };
+  wrap.appendChild(weekBtn);
+  const concernDays = new Set(getConcerns().map(c=>c.day));
+  DAYS.forEach(d=>{
+    const activeCount = DATA.routes.filter(r=>routeActiveOn(r,d)).length;
+    const btn = document.createElement('button');
+    btn.className = 'daytab' + (activeKey===d?' active':'') + (concernDays.has(d)?' hasgap':'');
+    btn.innerHTML = `${d} <span class="mono" style="font-size:9px;opacity:.7;">${fmtDate(WEEK[d])}</span><span class="n">${activeCount} route${activeCount!==1?'s':''}</span>`;
+    btn.onclick = ()=>{ scheduleSubTab=d; currentDay=d; showView('schedule'); };
+    wrap.appendChild(btn);
+  });
+  const lunchGap = DATA.routes.some(r=>r.lunch && Object.values(r.lunch).some(l=>!l.driver));
+  const lunchBtn = document.createElement('button');
+  lunchBtn.className = 'daytab' + (activeKey==='lunch' ? ' active':'') + (lunchGap?' hasgap':'');
+  lunchBtn.textContent = 'Lunch';
+  lunchBtn.onclick = ()=>{ scheduleSubTab='lunch'; showView('lunch'); };
+  wrap.appendChild(lunchBtn);
+  return wrap;
+}
+function renderSchedule(){
+  const el = document.getElementById('view-schedule');
+  el.innerHTML = '';
+  el.appendChild(renderScheduleSubNav(currentDay));
+  const tl = document.createElement('div'); tl.className='card'; tl.id='timeline';
+  el.appendChild(tl);
+  const split = document.createElement('div'); split.className='split';
+  const reliefCard = document.createElement('div'); reliefCard.className='card';
+  reliefCard.innerHTML = `<h2 class="display">Relief &amp; support staff</h2><div id="reliefBody"></div>`;
+  const fleetCard = document.createElement('div'); fleetCard.className='card';
+  fleetCard.innerHTML = `<h2 class="display">Fleet not tied to a fixed route</h2>
+    <div><span class="fleet-chip">AL-3 — Spare (28-cap)</span><span class="fleet-chip">219 — Spare (22-cap)</span>
+    <span class="fleet-chip">582 — Trips / charter (40-cap)</span><span class="fleet-chip">401 — Trips / charter (40-cap)</span></div>
+    <p class="note">These 4 vehicles cover breakdowns, charters, and trips — not part of the daily fixed-route timeline.</p>`;
+  split.appendChild(reliefCard); split.appendChild(fleetCard);
+  el.appendChild(split);
+
+  const day = currentDay;
+  const active = DATA.routes.filter(r=>routeActiveOn(r,day));
+  const tripsToday = DATA.trips.filter(t=>t.date===WEEK[day]);
+  const windowStart = Math.min(...active.map(r=>toMin(r.start)), toMin("7:00"), ...tripsToday.map(t=>toMin(t.departure)));
+  const windowEnd = Math.max(...active.map(r=>toMin(r.end)), toMin("18:00"), ...tripsToday.map(t=>toMin(t.return)));
+  const totalMin = windowEnd - windowStart;
+
+  const timeline = document.getElementById('timeline');
+  timeline.innerHTML = `<h2 class="display">${day==="Sat"||day==="Sun"?"Weekend":"Weekday"} timeline — ${day} (${fmtDate(WEEK[day])})</h2>`;
+  const axis=document.createElement('div'); axis.className='axis';
+  for(let h=Math.ceil(windowStart/60); h<=Math.floor(windowEnd/60); h+=2){
+    const pos=((h*60-windowStart)/totalMin)*100;
+    const s=document.createElement('span'); s.style.left=pos+'%'; s.textContent=label(`${h}:00`);
+    axis.appendChild(s);
+  }
+  timeline.appendChild(axis);
+
+  const cats = ["On-Campus","Off-Campus","Night","Weekend"];
+  let any=false;
+  cats.forEach(cat=>{
+    const rs = DATA.routes.map((r,i)=>({r,i})).filter(x=>x.r.cat===cat && routeActiveOn(x.r,day));
+    if(rs.length===0) return;
+    any=true;
+    const gl=document.createElement('div'); gl.className='grp-label'; gl.textContent=cat; timeline.appendChild(gl);
+    rs.forEach(({r,i})=>{
+      if(r.shifts2 && r.shifts2[day]){
+        r.shifts2[day].forEach((s,si)=>{
+          const row=document.createElement('div'); row.className='row';
+          const rlabel=document.createElement('div'); rlabel.className='rlabel';
+          rlabel.innerHTML = `<b>${r.name} — ${si===0?'AM':'PM'}</b><span>${r.vehicle.split('/')[si] ? r.vehicle.split('/')[si].trim() : r.vehicle}</span>`;
+          const track=document.createElement('div'); track.className='track';
+          const seg=document.createElement('div'); seg.className='seg'+(r.cdl?' cdl':'');
+          seg.setAttribute('data-route', r.name); seg.setAttribute('data-day', day);
+          const left=((toMin(s.start)-windowStart)/totalMin)*100;
+          const width=((toMin(s.end)-toMin(s.start))/totalMin)*100;
+          seg.style.left=left+'%'; seg.style.width=width+'%';
+          if(s.driver==="UNASSIGNED"){ seg.classList.add('gap'); seg.textContent="UNASSIGNED — click to assign"; }
+          else { seg.style.background=CAT_COLOR[cat]; seg.textContent=s.driver; }
+          seg.title = READ_ONLY ? "" : "Click to update this shift";
+          if(!READ_ONLY) seg.onclick=()=>openShiftEditor(r, day, si, seg); else seg.style.cursor='default';
+          track.appendChild(seg);
+          row.appendChild(rlabel); row.appendChild(track);
+          timeline.appendChild(row);
+        });
+        return;
+      }
+      const row=document.createElement('div'); row.className='row';
+      const rlabel=document.createElement('div'); rlabel.className='rlabel';
+      rlabel.innerHTML = `<b>${r.name}</b><span>${r.vehicle}</span>`;
+      const track=document.createElement('div'); track.className='track';
+      const seg=document.createElement('div'); seg.className='seg'+(r.cdl?' cdl':'');
+      seg.setAttribute('data-route', r.name); seg.setAttribute('data-day', day);
+      const left=((toMin(r.start)-windowStart)/totalMin)*100;
+      const width=((toMin(r.end)-toMin(r.start))/totalMin)*100;
+      seg.style.left=left+'%'; seg.style.width=width+'%';
+      if(r.days[day]==="UNASSIGNED"){ seg.classList.add('gap'); seg.textContent="UNASSIGNED — click to assign"; }
+      else { seg.style.background=CAT_COLOR[cat]; seg.textContent=r.days[day]; }
+      seg.title = READ_ONLY ? "" : "Click to update this shift";
+      if(!READ_ONLY) seg.onclick=()=>openEditor(i, day, seg); else seg.style.cursor='default';
+      track.appendChild(seg);
+      row.appendChild(rlabel); row.appendChild(track);
+      timeline.appendChild(row);
+      if(r.lunch && r.lunch[day]){
+        const lrow=document.createElement('div'); lrow.className='row'; lrow.style.marginTop='-4px'; lrow.style.marginBottom='10px';
+        const llabel=document.createElement('div'); llabel.className='rlabel'; llabel.innerHTML=`<span>&#8627; Lunch break</span>`;
+        const lbox=document.createElement('div'); lbox.style.display='flex'; lbox.style.gap='8px'; lbox.style.alignItems='center';
+        const timeInp=document.createElement('input'); timeInp.type='time'; timeInp.value=r.lunch[day].time;
+        timeInp.style.cssText='padding:4px 6px;border:1px solid var(--line);border-radius:4px;font-size:11.5px;width:100px;';
+        const relInp=document.createElement('select'); relInp.innerHTML=driverOptionsHTML(r.lunch[day].driver);
+        relInp.style.cssText='padding:4px 6px;border:1px solid var(--line);border-radius:4px;font-size:11.5px;width:150px;';
+        timeInp.onchange=()=>{ r.lunch[day].time=timeInp.value; saveData(); buildTabs(); };
+        relInp.onchange=()=>{ r.lunch[day].driver=relInp.value.trim(); saveData(); renderAll(); };
+        lbox.appendChild(timeInp); lbox.appendChild(relInp);
+        lrow.appendChild(llabel); lrow.appendChild(lbox);
+        timeline.appendChild(lrow);
+      }
+    });
+  });
+  if(tripsToday.length){
+    any=true;
+    const gl=document.createElement('div'); gl.className='grp-label'; gl.textContent='Trips'; timeline.appendChild(gl);
+    tripsToday.forEach(t=>{
+      const row=document.createElement('div'); row.className='row';
+      const rlabel=document.createElement('div'); rlabel.className='rlabel';
+      rlabel.innerHTML = `<b style="${t.status==='Cancelled'?'text-decoration:line-through;color:#8a7d76;':''}">${t.pickup} → ${t.destination}</b><span>${tripDriversLabel(t)} · <span style="color:${statusColor(t.status)};font-weight:700;">${t.status}</span></span>`;
+      const track=document.createElement('div'); track.className='track';
+      const seg=document.createElement('div'); seg.className='seg';
+      const left=((toMin(t.departure)-windowStart)/totalMin)*100;
+      const width=((toMin(t.return)-toMin(t.departure))/totalMin)*100;
+      seg.style.left=left+'%'; seg.style.width=width+'%'; seg.style.background= t.status==='Cancelled' ? '#8a7d76' : CAT_COLOR.Trip;
+      seg.textContent = `${label(t.departure)}–${label(t.return)}`;
+      seg.title = "Update this in the Trip Requests tab";
+      track.appendChild(seg);
+      row.appendChild(rlabel); row.appendChild(track);
+      timeline.appendChild(row);
+    });
+  }
+  if(!any){ const e=document.createElement('div'); e.className='empty'; e.textContent='No fixed routes or trips scheduled this day.'; timeline.appendChild(e); }
+
+  const gl2=document.createElement('div'); gl2.className='grp-label'; gl2.textContent='Optional (not currently running)'; timeline.appendChild(gl2);
+  DATA.optional.forEach(o=>{
+    const row=document.createElement('div'); row.className='row';
+    const rlabel=document.createElement('div'); rlabel.className='rlabel';
+    rlabel.innerHTML = `<b>${o.name}</b><span>${o.note}</span>`;
+    const track=document.createElement('div'); track.className='track';
+    const seg=document.createElement('div'); seg.className='seg ghost';
+    const left=((toMin(o.start)-windowStart)/totalMin)*100;
+    const width=((toMin(o.end)-toMin(o.start))/totalMin)*100;
+    seg.style.left=Math.max(0,left)+'%'; seg.style.width=width+'%'; seg.textContent='Not staffed';
+    track.appendChild(seg); row.appendChild(rlabel); row.appendChild(track);
+    timeline.appendChild(row);
+  });
+
+  const legend=document.createElement('div'); legend.className='legend';
+  legend.innerHTML = Object.keys(CAT_COLOR).map(k=>`<span><i style="background:${CAT_COLOR[k]}"></i>${k}</span>`).join('')
+    + `<span><i style="background:repeating-linear-gradient(45deg,#C7973F,#C7973F 3px,#F7EFDD 3px,#F7EFDD 6px)"></i>Optional / not running</span>`
+    + `<span><i style="background:#A63A2E"></i>Unassigned — needs coverage</span>`
+    + `<span>CDL badge = route requires a CDL driver</span>`;
+  timeline.appendChild(legend);
+
+  const rb = document.getElementById('reliefBody');
+  const onToday = DATA.relief.filter(x=>x.days[day]!==undefined);
+  if(onToday.length===0){ rb.innerHTML='<div class="empty">No relief/support data for this day.</div>'; }
+  else {
+    onToday.forEach(x=>{
+      const on = x.days[day];
+      const div=document.createElement('div'); div.className='relief-item';
+      const span=document.createElement('span'); span.textContent=x.name;
+      const btn=document.createElement('button'); btn.className='toggle';
+      btn.textContent = on?'On duty':'Not covered'; btn.style.color = on?'#2F6E62':'#A63A2E';
+      btn.onclick=()=>{ x.days[day]=!x.days[day]; renderAll(); saveData(); };
+      div.appendChild(span); div.appendChild(btn); rb.appendChild(div);
+    });
+  }
+}
+
+// ---------- week schedule (grid editor) ----------
+function addDaysISO(iso, n){ const [y,m,d]=iso.split('-').map(Number); const dt=new Date(y,m-1,d+n); return isoDate(dt); }
+function getPlannedValue(weekStartISO, route, day, shiftIdx){
+  const ov = DATA.weekOverrides[weekStartISO] && DATA.weekOverrides[weekStartISO][route.name] && DATA.weekOverrides[weekStartISO][route.name][day];
+  if(ov !== undefined) return shiftIdx!==undefined ? ov[shiftIdx] : ov;
+  return shiftIdx!==undefined ? route.shifts2[day][shiftIdx].driver : route.days[day];
+}
+function setPlannedValue(weekStartISO, route, day, val, shiftIdx){
+  if(!DATA.weekOverrides[weekStartISO]) DATA.weekOverrides[weekStartISO] = {};
+  if(!DATA.weekOverrides[weekStartISO][route.name]) DATA.weekOverrides[weekStartISO][route.name] = {};
+  if(shiftIdx!==undefined){
+    const existing = DATA.weekOverrides[weekStartISO][route.name][day] || route.shifts2[day].map(s=>s.driver);
+    existing[shiftIdx] = val;
+    DATA.weekOverrides[weekStartISO][route.name][day] = existing;
+  } else {
+    DATA.weekOverrides[weekStartISO][route.name][day] = val;
+  }
+}
+let planSelectedMonday = null;
+
+function renderLunch(){
+  const el = document.getElementById('view-lunch');
+  el.innerHTML = '';
+  el.appendChild(renderScheduleSubNav('lunch'));
+  const lunchRoutes = DATA.routes.filter(r=>r.lunch && Object.keys(r.lunch).length);
+  const gridCard = document.createElement('div'); gridCard.className='card';
+  gridCard.innerHTML = `<h2 class="display">Lunch schedule</h2>
+    <p class="note">Every route running more than 8 hours gets a 1-hour lunch break. This consolidates what's set per-day in the Schedule tab into one editable view. Leave the relief driver blank to mark it unassigned — it'll show in red here and on that driver's app.</p>
+    <table class="grid" id="lunchGrid"></table>`;
+  el.appendChild(gridCard);
+  const table = document.getElementById('lunchGrid');
+  if(lunchRoutes.length===0){
+    table.outerHTML = '<div class="empty">No routes currently require a lunch break.</div>';
+    return;
+  }
+  const lunchDays = ["Mon","Tue","Wed","Thu","Fri"];
+  let html = '<tr><th>Route</th>' + lunchDays.map(d=>`<th>${d}<br><span style="font-weight:400;">${fmtDate(WEEK[d])}</span></th>`).join('') + '</tr>';
+  lunchRoutes.forEach((r)=>{
+    const ri = DATA.routes.indexOf(r);
+    html += `<tr><td><b>${r.name}</b><br><span class="note">${r.vehicle}</span></td>`;
+    lunchDays.forEach(d=>{
+      if(!r.lunch[d]){ html += `<td class="muted">—</td>`; return; }
+      const time = r.lunch[d].time || "12:00";
+      const driver = r.lunch[d].driver || "";
+      html += `<td>
+        <input type="time" data-ri="${ri}" data-day="${d}" data-field="time" value="${time}" style="margin-bottom:4px;">
+        <select data-ri="${ri}" data-day="${d}" data-field="driver" style="${!driver?'border-color:var(--danger);color:var(--danger);':''}">${driverOptionsHTML(driver)}</select>
+      </td>`;
+    });
+    html += '</tr>';
+  });
+  table.innerHTML = html;
+  table.querySelectorAll('input, select').forEach(inp=>{
+    inp.onchange = ()=>{
+      const ri = parseInt(inp.dataset.ri), d = inp.dataset.day, field = inp.dataset.field;
+      const route = DATA.routes[ri];
+      if(field==='time'){ route.lunch[d].time = inp.value; }
+      else { route.lunch[d].driver = inp.value.trim(); }
+      saveData();
+      renderAll();
+    };
+  });
+}
+
+function renderWeek(){
+  const el = document.getElementById('view-week');
+  el.innerHTML = '';
+  el.appendChild(renderScheduleSubNav('week'));
+  const gridCard = document.createElement('div'); gridCard.className='card';
+  gridCard.innerHTML = `<h2 class="display">Week schedule</h2>
+    <p class="note">Changes here update the Dashboard and Schedule tabs immediately. Choose "— Unassigned —" to mark a shift open. Cells for days a route doesn't normally run are shown as "—".</p>
+    <table class="grid" id="weekGrid"></table>`;
+  el.appendChild(gridCard);
+  const table = document.getElementById('weekGrid');
+  let html = '<tr><th>Route</th>' + DAYS.map(d=>`<th>${d}<br><span style="font-weight:400;">${fmtDate(WEEK[d])}</span></th>`).join('') + '</tr>';
+  DATA.routes.forEach((r,ri)=>{
+    html += `<tr><td><b>${r.name}</b><br><span class="note">${r.vehicle}</span></td>`;
+    DAYS.forEach(d=>{
+      if(r.shifts2 && r.shifts2[d]){
+        html += `<td>` + r.shifts2[d].map((s,si)=>{
+          const val = s.driver==="UNASSIGNED" ? "" : s.driver;
+          return `<select data-ri="${ri}" data-day="${d}" data-shift="${si}" style="margin-bottom:3px;">${driverOptionsHTML(val)}</select>`;
+        }).join('') + `</td>`;
+      } else if(r.days[d]===undefined){ html += `<td class="muted">—</td>`; }
+      else {
+        const val = r.days[d]==="UNASSIGNED" ? "" : r.days[d];
+        html += `<td><select data-ri="${ri}" data-day="${d}">${driverOptionsHTML(val)}</select></td>`;
+      }
+    });
+    html += '</tr>';
+  });
+  html += `<tr><td><b>Trips</b><br><span class="note">from Trip Requests tab</span></td>` + DAYS.map(d=>{
+    const trips = DATA.trips.filter(t=>t.date===WEEK[d]);
+    if(trips.length===0) return `<td class="muted">—</td>`;
+    return `<td>${trips.map(t=>`<span style="color:${statusColor(t.status)};font-weight:700;">●</span> ${t.pickup}→${t.destination}<br><span class="note">${label(t.departure)}–${label(t.return)} · ${t.status}</span>`).join('<hr style="border:none;border-top:1px solid var(--line);margin:4px 0;">')}</td>`;
+  }).join('') + `</tr>`;
+  table.innerHTML = html;
+  table.querySelectorAll('select').forEach(inp=>{
+    inp.onchange = ()=>{
+      const ri = parseInt(inp.dataset.ri), d = inp.dataset.day;
+      const val = inp.value.trim();
+      if(inp.dataset.shift !== undefined && inp.dataset.shift !== ""){
+        DATA.routes[ri].shifts2[d][parseInt(inp.dataset.shift)].driver = val===""?"UNASSIGNED":val;
+      } else {
+        DATA.routes[ri].days[d] = val===""?"UNASSIGNED":val;
+      }
+      saveData();
+      buildTabs(); // refresh alert dots without full re-render (keeps focus stable)
+    };
+  });
+
+  const tripsThisWeek = DATA.trips.filter(t=>Object.values(WEEK).includes(t.date)).sort((a,b)=>a.date.localeCompare(b.date));
+  const tCard = document.createElement('div'); tCard.className='card';
+  tCard.innerHTML = `<h2 class="display">This week's trip requests</h2>`;
+  if(tripsThisWeek.length===0){ tCard.innerHTML += `<div class="empty">None — add trips in the Trip Requests tab.</div>`; }
+  else{
+    tripsThisWeek.forEach(t=>{
+      const div=document.createElement('div'); div.className='trip-item';
+      div.innerHTML = `<b>${fmtDate(t.date)}</b> — ${t.pickup} → ${t.destination} · ${label(t.departure)}–${label(t.return)} · ${tripDriversLabel(t)}`;
+      tCard.appendChild(div);
+    });
+  }
+  el.appendChild(tCard);
+
+  // ---- plan a future week ----
+  if(!planSelectedMonday) planSelectedMonday = addDaysISO(WEEK.Mon, 7);
+  const planCard = document.createElement('div'); planCard.className='card';
+  planCard.innerHTML = `<h2 class="display">Plan a future week</h2>
+    <p class="note">Pick any date in the week you want to plan. Changes here are staged separately — they won't touch the live schedule until you click "Apply this plan," so it's safe to try out a vacation swap and see if any gaps show up first.</p>
+    <div class="form-row" style="grid-template-columns:1fr 1fr;margin-bottom:14px;">
+      <div><label>Any date in the week to plan</label><input type="date" id="planDatePicker" value="${planSelectedMonday}"></div>
+      <div><button class="addbtn" id="planApply">Apply this plan to the live schedule</button></div>
+    </div>
+    <table class="grid" id="planGrid"></table>
+    <div id="planConcerns" style="margin-top:14px;"></div>`;
+  el.appendChild(planCard);
+
+  document.getElementById('planDatePicker').onchange = (e)=>{
+    planSelectedMonday = mondayISOFrom(e.target.value);
+    renderWeek();
+  };
+
+  const planWeek = weekDatesFromMonday(planSelectedMonday);
+  const planTable = document.getElementById('planGrid');
+  let phtml = '<tr><th>Route</th>' + DAYS.map(d=>`<th>${d}<br><span style="font-weight:400;">${fmtDate(planWeek[d])}</span></th>`).join('') + '</tr>';
+  DATA.routes.forEach((r,ri)=>{
+    phtml += `<tr><td><b>${r.name}</b><br><span class="note">${r.vehicle}</span></td>`;
+    DAYS.forEach(d=>{
+      if(r.shifts2 && r.shifts2[d]){
+        phtml += `<td>` + r.shifts2[d].map((s,si)=>{
+          const val = getPlannedValue(planSelectedMonday, r, d, si);
+          const shown = val==="UNASSIGNED" ? "" : val;
+          const isOverride = DATA.weekOverrides[planSelectedMonday] && DATA.weekOverrides[planSelectedMonday][r.name] && DATA.weekOverrides[planSelectedMonday][r.name][d] !== undefined;
+          return `<select data-ri="${ri}" data-day="${d}" data-shift="${si}" style="margin-bottom:3px;${isOverride?'border-color:#C7973F;border-width:2px;':''}">${driverOptionsHTML(shown)}</select>`;
+        }).join('') + `</td>`;
+      } else if(r.days[d]===undefined){ phtml += `<td class="muted">—</td>`; }
+      else {
+        const val = getPlannedValue(planSelectedMonday, r, d);
+        const shown = val==="UNASSIGNED" ? "" : val;
+        const isOverride = DATA.weekOverrides[planSelectedMonday] && DATA.weekOverrides[planSelectedMonday][r.name] && DATA.weekOverrides[planSelectedMonday][r.name][d] !== undefined;
+        phtml += `<td><select data-ri="${ri}" data-day="${d}" style="${isOverride?'border-color:#C7973F;border-width:2px;':''}">${driverOptionsHTML(shown)}</select></td>`;
+      }
+    });
+    phtml += '</tr>';
+  });
+  planTable.innerHTML = phtml;
+  planTable.querySelectorAll('select').forEach(inp=>{
+    inp.onchange = ()=>{
+      const ri = parseInt(inp.dataset.ri), d = inp.dataset.day;
+      const r = DATA.routes[ri];
+      const val = inp.value.trim();
+      const finalVal = val===""?"UNASSIGNED":val;
+      if(inp.dataset.shift !== undefined && inp.dataset.shift !== ""){
+        setPlannedValue(planSelectedMonday, r, d, finalVal, parseInt(inp.dataset.shift));
+      } else {
+        setPlannedValue(planSelectedMonday, r, d, finalVal);
+      }
+      saveData();
+      renderWeek();
+    };
+  });
+
+  const planConcernsEl = document.getElementById('planConcerns');
+  const gaps = [];
+  DATA.routes.forEach(r=>{
+    Object.keys(r.days).forEach(d=>{
+      if(getPlannedValue(planSelectedMonday, r, d) === "UNASSIGNED") gaps.push(`${r.name} — ${d} (${fmtDate(planWeek[d])})`);
+    });
+    if(r.shifts2) Object.keys(r.shifts2).forEach(d=>{
+      r.shifts2[d].forEach((s,si)=>{ if(getPlannedValue(planSelectedMonday, r, d, si)==="UNASSIGNED") gaps.push(`${r.name} (${si===0?'AM':'PM'}) — ${d} (${fmtDate(planWeek[d])})`); });
+    });
+  });
+  if(gaps.length===0){
+    planConcernsEl.innerHTML = `<div class="ok-banner" style="border:1px solid #BFD8CE;background:#EEF6F1;border-radius:6px;padding:10px 16px;font-size:12.5px;color:#2F6E62;">This plan has no open shifts for the week of ${fmtDate(planWeek.Mon)}.</div>`;
+  } else {
+    planConcernsEl.innerHTML = `<div class="conflicts"><h3 class="display">${gaps.length} open shift${gaps.length!==1?'s':''} in this plan</h3><ul>${gaps.map(g=>`<li>${g}</li>`).join('')}</ul></div>`;
+  }
+
+  document.getElementById('planApply').onclick = ()=>{
+    const overrides = DATA.weekOverrides[planSelectedMonday];
+    if(overrides){
+      Object.keys(overrides).forEach(routeName=>{
+        const r = DATA.routes.find(x=>x.name===routeName);
+        if(!r) return;
+        Object.keys(overrides[routeName]).forEach(d=>{
+          const val = overrides[routeName][d];
+          if(r.shifts2 && r.shifts2[d]){
+            r.shifts2[d].forEach((s,si)=>{ s.driver = val[si]; });
+          } else if(r.days[d]!==undefined){
+            r.days[d] = val;
+          }
+        });
+      });
+      delete DATA.weekOverrides[planSelectedMonday];
+    }
+    saveData(); renderAll();
+  };
+}
+
+// ---------- driver hours ----------
+function renderHours(){
+  const el = document.getElementById('view-hours');
+  const hrs = getDriverHours();
+  const overCount = hrs.filter(h=>h.hours>OT_LIMIT).length;
+  el.innerHTML = '';
+  const stats = document.createElement('div'); stats.className='stat-grid'; stats.style.gridTemplateColumns='repeat(3,1fr)';
+  stats.innerHTML = `
+    <div class="stat ${overCount?'danger':'ok'}"><b>${overCount}</b><span>Driver${overCount!==1?'s':''} over ${OT_LIMIT} hrs</span></div>
+    <div class="stat info"><b>${hrs.length}</b><span>Drivers with a fixed-route shift this week</span></div>
+    <div class="stat info"><b>${hrs.reduce((s,h)=>s+h.hours,0).toFixed(0)}</b><span>Total scheduled hours</span></div>`;
+  el.appendChild(stats);
+
+  const card = document.createElement('div'); card.className='card';
+  card.innerHTML = `<h2 class="display">Weekly hours by driver</h2>
+    <p class="note">Calculated from fixed-route shift lengths, minus the mandatory 1-hour lunch break on any shift over 8 hours (credited instead to that day's assigned lunch relief driver, set in the Schedule tab). Shared shifts (e.g. "A/B") split remaining hours evenly. Relief/support roles without a fixed shift length otherwise aren't included.</p>`;
+  hrs.forEach(h=>{
+    const row = document.createElement('div'); row.className='hrow'+(h.hours>OT_LIMIT?' over':'');
+    row.innerHTML = `<span>${h.name}</span><span class="mono">${h.hours.toFixed(1)} hrs ${h.hours>OT_LIMIT?'<span class="badge">OVER 40</span>':''}</span>`;
+    card.appendChild(row);
+  });
+  if(hrs.length===0) card.innerHTML += `<div class="empty">No driver shifts found.</div>`;
+  el.appendChild(card);
+}
+
+// ---------- call-outs ----------
+function renderCallouts(){
+  const el = document.getElementById('view-callouts');
+  el.innerHTML = `<div class="card"><h2 class="display">Log a call-out</h2>
+    <div class="form-row">
+      <div><label>Date</label><input type="date" id="coDate"></div>
+      <div><label>Driver</label><select id="coDriver">${driverOptionsHTML('')}</select></div>
+      <div><label>Time</label><input type="time" id="coTime"></div>
+      <div><label>Route affected</label><input type="text" id="coRoute" placeholder="Optional"></div>
+      <div><label>Reason</label><select id="coReason">
+        <option>Sick</option><option>Vacation</option><option>Personal</option><option>No-show</option><option>Other</option>
+      </select></div>
+      <div><label>Replacement driver</label><select id="coReplacement">${driverOptionsHTML('')}</select></div>
+      <div><label>Notes</label><input type="text" id="coNotes" placeholder="Optional"></div>
+      <div><button class="addbtn" id="coAdd">Add</button></div>
+    </div></div>
+    <div class="card"><h2 class="display">Call-out log</h2><div id="coList"></div></div>`;
+  document.getElementById('coAdd').onclick = ()=>{
+    const date = document.getElementById('coDate').value;
+    const driver = document.getElementById('coDriver').value;
+    if(!date || !driver) return;
+    DATA.callouts.push({
+      date, driver,
+      time: document.getElementById('coTime').value,
+      route: document.getElementById('coRoute').value.trim(),
+      reason: document.getElementById('coReason').value,
+      replacement: document.getElementById('coReplacement').value,
+      notes: document.getElementById('coNotes').value.trim()
+    });
+    saveData(); renderCallouts();
+  };
+  const list = document.getElementById('coList');
+  const sorted = [...DATA.callouts].map((c,i)=>({c,i})).sort((a,b)=>b.c.date.localeCompare(a.c.date));
+  if(sorted.length===0){ list.innerHTML = '<div class="empty">No call-outs logged yet.</div>'; }
+  else{
+    sorted.forEach(({c,i})=>{
+      const div=document.createElement('div'); div.className='callout-item'; div.style.display='flex'; div.style.justifyContent='space-between'; div.style.alignItems='center';
+      div.innerHTML = `<span><b>${fmtDate(c.date)}</b> — ${c.driver} (${c.reason})${c.time? ' · '+label(c.time):''}${c.route? ' · '+c.route:''}${c.replacement? ' · replaced by '+c.replacement:''}${c.notes? ' · '+c.notes:''}</span>`;
+      const del=document.createElement('button'); del.className='delbtn'; del.textContent='✕';
+      del.onclick=()=>{ DATA.callouts.splice(i,1); saveData(); renderCallouts(); };
+      div.appendChild(del);
+      list.appendChild(div);
+    });
+  }
+}
+
+// ---------- trip requests ----------
+function renderTrips(){
+  const el = document.getElementById('view-trips');
+  el.innerHTML = `<div class="card"><h2 class="display">Log a trip request</h2>
+    <div class="form-row">
+      <div><label>Trip date</label><input type="date" id="trDate"></div>
+      <div><label>Pickup location</label><input type="text" id="trPickup"></div>
+      <div><label>Destination</label><input type="text" id="trDest"></div>
+      <div><label>Departure time</label><input type="time" id="trDep"></div>
+      <div><label>Return time</label><input type="time" id="trRet"></div>
+      <div><label>Driver(s) assigned</label><select id="trDrivers" multiple size="5">${driverMultiOptionsHTML([])}</select></div>
+      <div><label>Status</label><select id="trStatus"><option>Pending</option><option>Completed</option><option>Cancelled</option></select></div>
+    </div>
+    <button class="addbtn" id="trAdd">Add trip</button></div>
+    <div class="card"><h2 class="display">Trip log — full year</h2><div id="trList"></div></div>`;
+  document.getElementById('trAdd').onclick = ()=>{
+    const date = document.getElementById('trDate').value;
+    const pickup = document.getElementById('trPickup').value.trim();
+    const destination = document.getElementById('trDest').value.trim();
+    const departure = document.getElementById('trDep').value;
+    const ret = document.getElementById('trRet').value;
+    if(!date || !pickup || !destination || !departure || !ret) return;
+    const drivers = Array.from(document.getElementById('trDrivers').selectedOptions).map(o=>o.value);
+    DATA.trips.push({date, pickup, destination, departure, return: ret, drivers, status: document.getElementById('trStatus').value});
+    saveData(); renderTrips();
+  };
+  const list = document.getElementById('trList');
+  const sorted = [...DATA.trips].map((t,i)=>({t,i})).sort((a,b)=>a.t.date.localeCompare(b.t.date));
+  if(sorted.length===0){ list.innerHTML = '<div class="empty">No trips logged yet.</div>'; }
+  else{
+    sorted.forEach(({t,i})=>{
+      const div=document.createElement('div'); div.className='trip-item'; div.style.display='flex'; div.style.justifyContent='space-between'; div.style.alignItems='center';
+      const span=document.createElement('span');
+      span.innerHTML = `<b>${fmtDate(t.date)}</b> — ${t.pickup} → ${t.destination} · ${label(t.departure)}–${label(t.return)} · ${tripDriversLabel(t)}`;
+      const right=document.createElement('div'); right.style.display='flex'; right.style.gap='8px'; right.style.alignItems='center';
+      const statusSel=document.createElement('select'); statusSel.style.cssText=`border:1px solid ${statusColor(t.status)};color:${statusColor(t.status)};border-radius:4px;padding:3px 6px;font-size:11px;font-weight:700;`;
+      ["Pending","Completed","Cancelled"].forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; if(t.status===s) o.selected=true; statusSel.appendChild(o); });
+      statusSel.onchange=()=>{ t.status=statusSel.value; saveData(); renderTrips(); };
+      const del=document.createElement('button'); del.className='delbtn'; del.textContent='✕';
+      del.onclick=()=>{ DATA.trips.splice(i,1); saveData(); renderTrips(); };
+      right.appendChild(statusSel); right.appendChild(del);
+      div.appendChild(span); div.appendChild(right);
+      list.appendChild(div);
+    });
+  }
+}
+
+// ---------- look up ----------
+// ---------- staffing ----------
+function trainingSelectHTML(selectedArr){
+  const sel = selectedArr || [];
+  return ["E-Bus","Mini EV","Motor Coach"].map(t=>`<option value="${t}" ${sel.includes(t)?'selected':''}>${t}</option>`).join('');
+}
+function renderStaffing(){
+  const el = document.getElementById('view-staffing');
+  el.innerHTML = `
+    <div class="card">
+      <h2 class="display">Add a driver</h2>
+      <div class="form-row" style="grid-template-columns:repeat(5,1fr);">
+        <div><label>Name</label><input type="text" id="stName" placeholder="Full name"></div>
+        <div><label>Employment</label><select id="stEmployment"><option>Full-Time</option><option>Part-Time</option></select></div>
+        <div><label>CDL driver?</label><select id="stCDL"><option value="true">Yes</option><option value="false">No</option></select></div>
+        <div><label>Availability</label><input type="text" id="stAvail" placeholder="e.g. Mon-Fri 9AM-5PM"></div>
+        <div><label>Training</label><select id="stTraining" multiple size="3">${trainingSelectHTML([])}</select></div>
+      </div>
+      <button class="addbtn" id="stAdd">Add driver</button>
+    </div>
+    <div class="card">
+      <h2 class="display">Staffing roster</h2>
+      <p class="note">Changes here immediately update the driver dropdowns across every tab.</p>
+      <table class="grid" id="staffGrid"></table>
+    </div>`;
+
+  document.getElementById('stAdd').onclick = ()=>{
+    const name = document.getElementById('stName').value.trim();
+    if(!name) return;
+    DATA.staffing[name] = {
+      employment: document.getElementById('stEmployment').value,
+      cdl: document.getElementById('stCDL').value === 'true',
+      availability: document.getElementById('stAvail').value.trim(),
+      training: Array.from(document.getElementById('stTraining').selectedOptions).map(o=>o.value)
+    };
+    saveData(); renderAll();
+  };
+
+  const grid = document.getElementById('staffGrid');
+  let html = '<tr><th>Name</th><th>Employment</th><th>CDL</th><th>Availability</th><th>Training</th></tr>';
+  const roster = getRoster();
+  [...roster.fullTime, ...roster.partTime].forEach(name=>{
+    const info = DATA.staffing[name];
+    html += `<tr>
+      <td><b>${name}</b></td>
+      <td><select data-name="${name}" data-field="employment">
+        <option ${info.employment==='Full-Time'?'selected':''}>Full-Time</option>
+        <option ${info.employment==='Part-Time'?'selected':''}>Part-Time</option>
+      </select></td>
+      <td><select data-name="${name}" data-field="cdl">
+        <option value="true" ${info.cdl?'selected':''}>Yes</option>
+        <option value="false" ${!info.cdl?'selected':''}>No</option>
+      </select></td>
+      <td><input type="text" data-name="${name}" data-field="availability" value="${(info.availability||'').replace(/"/g,'&quot;')}"></td>
+      <td><select data-name="${name}" data-field="training" multiple size="3">${trainingSelectHTML(info.training)}</select></td>
+    </tr>`;
+  });
+  grid.innerHTML = html;
+  grid.querySelectorAll('select,input').forEach(inp=>{
+    inp.onchange = ()=>{
+      const name = inp.dataset.name, field = inp.dataset.field;
+      if(field==='training'){ DATA.staffing[name].training = Array.from(inp.selectedOptions).map(o=>o.value); }
+      else if(field==='cdl'){ DATA.staffing[name].cdl = inp.value === 'true'; }
+      else if(field==='availability'){ DATA.staffing[name].availability = inp.value.trim(); }
+      else if(field==='employment'){ DATA.staffing[name].employment = inp.value; }
+      saveData();
+      if(field==='employment') renderStaffing(); else buildTabs();
+    };
+  });
+}
+
+// ---------- workforce ----------
+function parseStatedRangeCap(text){
+  if(!text) return null;
+  const m = text.match(/(\d+)\s*[–-]\s*(\d+)\s*hours?/i);
+  return m ? parseInt(m[2]) : null;
+}
+function renderWorkforce(){
+  const el = document.getElementById('view-workforce');
+  const demand = getWeeklyDemandHours();
+  const hoursByName = {};
+  getDriverHours().forEach(h=>{ hoursByName[h.name] = h.hours; });
+  const assigned = Object.values(hoursByName).reduce((s,h)=>s+h,0);
+  const gap = Math.max(0, demand - assigned);
+  const roster = getRoster();
+
+  el.innerHTML = '';
+  const stats = document.createElement('div'); stats.className='stat-grid';
+  stats.innerHTML = `
+    <div class="stat info"><b>${demand.toFixed(1)}</b><span>Hours needed to run every route, fully staffed</span></div>
+    <div class="stat info"><b>${assigned.toFixed(1)}</b><span>Hours currently covered by assigned drivers</span></div>
+    <div class="stat ${gap>0?'danger':'ok'}"><b>${gap.toFixed(1)}</b><span>Weekly hours still uncovered</span></div>`;
+  el.appendChild(stats);
+
+  if(gap>0){
+    const gapCard = document.createElement('div'); gapCard.className='card';
+    gapCard.innerHTML = `<h2 class="display">Where the gap is</h2>`;
+    getConcerns().filter(c=>c.type==="Unassigned shift").forEach(c=>{
+      const row=document.createElement('div'); row.className='concern';
+      row.innerHTML = `<div class="info"><b>${c.day}</b>${c.detail}</div>`;
+      gapCard.appendChild(row);
+    });
+    el.appendChild(gapCard);
+  }
+
+  // Full-time headroom
+  const ftCard = document.createElement('div'); ftCard.className='card';
+  ftCard.innerHTML = `<h2 class="display">Full-time headroom (before 40 hrs/week)</h2>`;
+  let ftHeadroomTotal = 0;
+  roster.fullTime.forEach(n=>{
+    const cur = hoursByName[n] || 0;
+    const headroom = Math.max(0, OT_LIMIT - cur);
+    ftHeadroomTotal += headroom;
+    const row=document.createElement('div'); row.className='hrow';
+    row.innerHTML = `<span>${n}</span><span class="mono">${cur.toFixed(1)} hrs assigned <span style="color:#8a7d76;">(+${headroom.toFixed(1)} hrs headroom)</span></span>`;
+    ftCard.appendChild(row);
+  });
+  el.appendChild(ftCard);
+
+  // Part-time headroom (where a numeric range was given) + qualitative notes
+  const ptCard = document.createElement('div'); ptCard.className='card';
+  ptCard.innerHTML = `<h2 class="display">Part-time capacity</h2>
+    <p class="note">Where availability includes a clear hour range (e.g. "20–25 hours/week"), headroom is calculated against the upper bound. Everything else is shown as-is for your own judgment — day/time-window limits and "X days a week" style constraints aren't reduced to a number.</p>`;
+  let ptHeadroomTotal = 0;
+  roster.partTime.forEach(n=>{
+    const cur = hoursByName[n] || 0;
+    const info = DATA.staffing[n];
+    const cap = parseStatedRangeCap(info && info.availability);
+    const row=document.createElement('div'); row.className='hrow'; row.style.flexDirection='column'; row.style.alignItems='stretch';
+    let right;
+    if(cap!==null){
+      const headroom = Math.max(0, cap-cur);
+      ptHeadroomTotal += headroom;
+      right = `${cur.toFixed(1)} hrs assigned <span style="color:#8a7d76;">(+${headroom.toFixed(1)} hrs headroom vs. stated ${cap})</span>`;
+    } else {
+      right = `${cur.toFixed(1)} hrs assigned`;
+    }
+    row.innerHTML = `<div style="display:flex;justify-content:space-between;"><span>${n}</span><span class="mono">${right}</span></div><span class="note">${(info&&info.availability)||''}</span>`;
+    ptCard.appendChild(row);
+  });
+  el.appendChild(ptCard);
+
+  // What-if capacity calculator
+  const calcCard = document.createElement('div'); calcCard.className='card';
+  const totalHeadroom = ftHeadroomTotal + ptHeadroomTotal;
+  calcCard.innerHTML = `<h2 class="display">Could we take on another route?</h2>
+    <p class="note">Estimated spare capacity right now: <b>${totalHeadroom.toFixed(1)} hrs/week</b> (full-time headroom below 40 hrs, plus part-time headroom where a clear hour range was given — this excludes anyone whose limit is described only in days or a time window, so treat it as a floor, not a ceiling).</p>
+    <div class="form-row" style="grid-template-columns:1fr 1fr;">
+      <div><label>Weekly hours the new route would need</label><input type="number" id="wfNewRouteHours" min="0" step="0.5" placeholder="e.g. 20"></div>
+      <div><button class="addbtn" id="wfCheck">Check</button></div>
+    </div>
+    <div id="wfCheckResult"></div>`;
+  el.appendChild(calcCard);
+  document.getElementById('wfCheck').onclick = ()=>{
+    const need = parseFloat(document.getElementById('wfNewRouteHours').value);
+    const resultEl = document.getElementById('wfCheckResult');
+    if(isNaN(need)){ resultEl.innerHTML=''; return; }
+    if(need <= totalHeadroom){
+      resultEl.innerHTML = `<div class="ok-banner" style="border:1px solid #BFD8CE;background:#EEF6F1;border-radius:6px;padding:10px 16px;font-size:12.5px;color:#2F6E62;">Looks feasible on paper — ${need.toFixed(1)} hrs is within the ${totalHeadroom.toFixed(1)} hrs of estimated headroom. Still worth checking that the right people are trained and available for when the route actually runs.</div>`;
+    } else {
+      resultEl.innerHTML = `<div class="conflicts"><h3 class="display">Short by ${(need-totalHeadroom).toFixed(1)} hrs/week</h3><p style="font-size:12.5px;margin:0;">Current headroom (${totalHeadroom.toFixed(1)} hrs) doesn't cover a ${need.toFixed(1)}-hr/week route without new hires or schedule changes.</p></div>`;
+    }
+  };
+}
+
+function renderLookup(){
+  const el = document.getElementById('view-lookup');
+  el.innerHTML = `
+    <div class="card">
+      <h2 class="display">Look up by date</h2>
+      <p class="note">Shows who was scheduled on a given date. This log builds day by day as the schedule is used, starting from when this feature was added — it can't show dates before that.</p>
+      <div class="form-row" style="grid-template-columns:1fr 1fr;">
+        <div><label>Date</label><input type="date" id="luDate"></div>
+        <div><button class="addbtn" id="luDateGo">Search</button></div>
+      </div>
+      <div id="luDateResults"></div>
+    </div>
+    <div class="card">
+      <h2 class="display">Look up by driver</h2>
+      <div class="form-row" style="grid-template-columns:1fr 1fr;">
+        <div><label>Driver name</label><input type="text" id="luDriver" list="luDriverList">
+          <datalist id="luDriverList">${(()=>{const r=getRoster();return [...r.fullTime,...r.partTime].map(n=>`<option value="${n}">`).join('');})()}</datalist>
+        </div>
+        <div><button class="addbtn" id="luDriverGo">Search</button></div>
+      </div>
+      <div id="luDriverResults"></div>
+    </div>`;
+
+  document.getElementById('luDateGo').onclick = ()=>{
+    const d = document.getElementById('luDate').value;
+    const res = document.getElementById('luDateResults');
+    if(!d){ res.innerHTML=''; return; }
+    const snap = DATA.history && DATA.history[d];
+    const callsThatDay = DATA.callouts.filter(c=>c.date===d);
+    let html = '';
+    if(snap){
+      html += Object.entries(snap).map(([route,driver])=>
+        `<div class="hrow"><span>${route}</span><span>${driver}</span></div>`).join('');
+    } else {
+      html += '<div class="empty">No schedule record for that date yet.</div>';
+    }
+    if(callsThatDay.length){
+      html += `<div class="grp-label">Call-outs that day</div>`;
+      html += callsThatDay.map(c=>
+        `<div class="callout-item">${c.driver} (${c.reason})${c.time? ' · '+label(c.time):''}${c.route? ' · '+c.route:''}${c.replacement? ' · replaced by '+c.replacement:''}${c.notes? ' · '+c.notes:''}</div>`
+      ).join('');
+    }
+    res.innerHTML = html;
+  };
+  document.getElementById('luDriverGo').onclick = ()=>{
+    const name = document.getElementById('luDriver').value.trim();
+    const res = document.getElementById('luDriverResults');
+    if(!name){ res.innerHTML = '<div class="empty">Enter a name to search.</div>'; return; }
+    const dates = DATA.history ? Object.keys(DATA.history).filter(d=>
+      Object.values(DATA.history[d]).some(v=> v && v.split('/').map(s=>s.trim()).includes(name))
+    ).sort() : [];
+    const calls = DATA.callouts.filter(c=>c.driver===name || c.replacement===name);
+    let html = '';
+    if(dates.length===0 && calls.length===0){
+      html = '<div class="empty">No recorded shifts or call-outs for that name yet.</div>';
+    } else {
+      if(dates.length){
+        html += dates.map(d=>{
+          const routes = Object.entries(DATA.history[d]).filter(([r,v])=>v && v.split('/').map(s=>s.trim()).includes(name)).map(([r])=>r);
+          return `<div class="hrow"><span>${fmtDate(d)}</span><span>${routes.join(', ')}</span></div>`;
+        }).join('');
+      }
+      if(calls.length){
+        html += `<div class="grp-label">Call-out history</div>`;
+        html += calls.sort((a,b)=>b.date.localeCompare(a.date)).map(c=>
+          `<div class="callout-item">${fmtDate(c.date)} — ${c.driver===name? 'Called out':'Covered for '+c.driver} (${c.reason})${c.time? ' · '+label(c.time):''}${c.replacement && c.driver===name? ' · replaced by '+c.replacement:''}</div>`
+        ).join('');
+      }
+    }
+    res.innerHTML = html;
+  };
+}
+
+document.getElementById('modeSubtitle').textContent = READ_ONLY
+  ? "View only — ask your dispatcher for changes"
+  : "Click any shift to update the schedule";
+loadData();
+</script>
+</body>
+</html>
