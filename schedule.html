@@ -108,7 +108,10 @@
       <p id="modeSubtitle" style="margin:0;color:#EAD9CF;font-size:12.5px;"></p>
     </div>
   </div>
-  <div class="savebadge" id="saveBadge"></div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button id="saveNowBtn" style="background:#C7973F;color:#4A1420;border:none;padding:9px 16px;border-radius:6px;font-size:12.5px;font-weight:800;cursor:pointer;">Save Now</button>
+    <div class="savebadge" id="saveBadge"></div>
+  </div>
 </header>
 
 <div class="wrap">
@@ -404,6 +407,11 @@ function migrateData(d){
   d.callouts.forEach(c=>{ c.driver = renameDriverString(c.driver); if(c.replacement) c.replacement = renameDriverString(c.replacement); });
   if(!d.history) d.history={};
   if(!d.weekOverrides) d.weekOverrides={};
+  if(!d.holidays) d.holidays={};
+  Object.values(d.holidays).forEach(h=>{
+    if(!h.assignments) h.assignments = {};
+    ["East WKND","West WKND"].forEach(r=>{ if(!h.assignments[r]) h.assignments[r] = "UNASSIGNED"; });
+  });
   if(!d.staffing) d.staffing = {};
   Object.keys(DEFAULT_STAFFING).forEach(name=>{
     if(!d.staffing[name]) d.staffing[name] = JSON.parse(JSON.stringify(DEFAULT_STAFFING[name]));
@@ -694,6 +702,8 @@ function renderAll(){
 }
 function lockReadOnly(){
   // Look Up's search fields and Workforce's what-if calculator stay active — everything that mutates data gets locked.
+  const saveBtn = document.getElementById('saveNowBtn');
+  if(saveBtn) saveBtn.style.display = 'none';
   ['view-dashboard','view-week','view-lunch','view-schedule','view-hours','view-callouts','view-trips','view-staffing'].forEach(id=>{
     const container = document.getElementById(id);
     if(!container) return;
@@ -711,6 +721,17 @@ function renderDashboard(){
   const recentCallouts = [...DATA.callouts].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
 
   el.innerHTML = '';
+
+  const todayISODash = WEEK[getTodayLabel()];
+  if(DATA.holidays[todayISODash]){
+    const h = DATA.holidays[todayISODash];
+    const holBanner = document.createElement('div'); holBanner.className='card';
+    holBanner.style.background = '#FBF3E1'; holBanner.style.borderColor = '#C7973F';
+    holBanner.innerHTML = `<h2 class="display" style="color:#4A1420;">Today is a marked ${h.type}${h.label? ' — '+h.label:''}</h2>
+      <p style="font-size:12.5px;margin:0;color:#5a4a1f;">Only East WKND and West WKND are running today — see Daily Schedule to assign drivers. Full-time staff are paid today, part-time are not, and no lunch relief is needed.</p>`;
+    el.appendChild(holBanner);
+  }
+
   const stats = document.createElement('div'); stats.className='stat-grid';
   stats.innerHTML = `
     <div class="stat ${concerns.length? 'danger':'ok'}"><b>${concerns.length}</b><span>Area${concerns.length!==1?'s':''} of concern</span></div>
@@ -911,6 +932,51 @@ function renderSchedule(){
   const el = document.getElementById('view-schedule');
   el.innerHTML = '';
   el.appendChild(renderScheduleSubNav(currentDay));
+  const todayISOForDay = WEEK[currentDay];
+  const holidayForDay = DATA.holidays[todayISOForDay];
+  const dayTypeCard = document.createElement('div'); dayTypeCard.className='card';
+  if(holidayForDay){
+    dayTypeCard.style.background = '#FBF3E1'; dayTypeCard.style.borderColor = '#C7973F';
+  }
+  dayTypeCard.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="flex:none;">
+        <label style="font-size:10.5px;color:#8a7d76;display:block;margin-bottom:3px;">Day type</label>
+        <select id="dayTypeSelect">
+          <option value="" ${!holidayForDay?'selected':''}>Normal schedule</option>
+          <option value="Holiday" ${holidayForDay&&holidayForDay.type==='Holiday'?'selected':''}>Holiday</option>
+          <option value="Snow Day" ${holidayForDay&&holidayForDay.type==='Snow Day'?'selected':''}>Snow Day</option>
+          <option value="Other" ${holidayForDay&&holidayForDay.type==='Other'?'selected':''}>Other</option>
+        </select>
+      </div>
+      <div style="flex:1;min-width:160px;${holidayForDay?'':'display:none;'}" id="dayTypeLabelWrap">
+        <label style="font-size:10.5px;color:#8a7d76;display:block;margin-bottom:3px;">Label (optional)</label>
+        <input type="text" id="dayTypeLabel" placeholder="e.g. Thanksgiving Break" value="${holidayForDay?(holidayForDay.label||''):''}">
+      </div>
+    </div>
+    ${holidayForDay ? `<p style="font-size:12.5px;margin:10px 0 0;color:#5a4a1f;">Only East WKND and West WKND run on this date — normal weekday routes are hidden below, and no lunch relief is needed (drivers park for lunch on weekends and holidays).</p>` : ``}
+  `;
+  el.appendChild(dayTypeCard);
+  document.getElementById('dayTypeSelect').onchange = (e)=>{
+    const type = e.target.value;
+    if(!type){
+      delete DATA.holidays[todayISOForDay];
+    } else {
+      const existing = DATA.holidays[todayISOForDay];
+      DATA.holidays[todayISOForDay] = {
+        type,
+        label: existing ? (existing.label||'') : '',
+        assignments: existing ? existing.assignments : {"East WKND":"UNASSIGNED","West WKND":"UNASSIGNED"}
+      };
+    }
+    saveData(); renderAll();
+  };
+  if(holidayForDay){
+    document.getElementById('dayTypeLabel').onchange = (e)=>{
+      DATA.holidays[todayISOForDay].label = e.target.value.trim();
+      saveData();
+    };
+  }
   const tl = document.createElement('div'); tl.className='card'; tl.id='timeline';
   el.appendChild(tl);
   const split = document.createElement('div'); split.className='split';
@@ -925,14 +991,15 @@ function renderSchedule(){
   el.appendChild(split);
 
   const day = currentDay;
-  const active = DATA.routes.filter(r=>routeActiveOn(r,day));
+  const weekendRoutes = DATA.routes.filter(r=>r.name==="East WKND" || r.name==="West WKND");
+  const active = holidayForDay ? weekendRoutes : DATA.routes.filter(r=>routeActiveOn(r,day));
   const tripsToday = DATA.trips.filter(t=>t.date===WEEK[day]);
   const windowStart = Math.min(...active.map(r=>toMin(r.start)), toMin("7:00"), ...tripsToday.map(t=>toMin(t.departure)));
   const windowEnd = Math.max(...active.map(r=>toMin(r.end)), toMin("18:00"), ...tripsToday.map(t=>toMin(t.return)));
   const totalMin = windowEnd - windowStart;
 
   const timeline = document.getElementById('timeline');
-  timeline.innerHTML = `<h2 class="display">${day==="Sat"||day==="Sun"?"Weekend":"Weekday"} timeline — ${day} (${fmtDate(WEEK[day])})</h2>`;
+  timeline.innerHTML = `<h2 class="display">${holidayForDay ? holidayForDay.type : (day==="Sat"||day==="Sun"?"Weekend":"Weekday")} timeline — ${day} (${fmtDate(WEEK[day])})</h2>`;
   const axis=document.createElement('div'); axis.className='axis';
   for(let h=Math.ceil(windowStart/60); h<=Math.floor(windowEnd/60); h+=2){
     const pos=((h*60-windowStart)/totalMin)*100;
@@ -940,6 +1007,32 @@ function renderSchedule(){
     axis.appendChild(s);
   }
   timeline.appendChild(axis);
+
+  if(holidayForDay){
+    const gl=document.createElement('div'); gl.className='grp-label'; gl.textContent='Weekend / Holiday'; timeline.appendChild(gl);
+    weekendRoutes.forEach(r=>{
+      const row=document.createElement('div'); row.className='row';
+      const rlabel=document.createElement('div'); rlabel.className='rlabel';
+      rlabel.innerHTML = `<b>${r.name}</b><span>${r.vehicle}</span>`;
+      const track=document.createElement('div'); track.className='track';
+      const seg=document.createElement('div'); seg.className='seg';
+      const cur = holidayForDay.assignments[r.name];
+      const left=((toMin(r.start)-windowStart)/totalMin)*100;
+      const width=((toMin(r.end)-toMin(r.start))/totalMin)*100;
+      seg.style.left=left+'%'; seg.style.width=width+'%';
+      if(!cur || cur==="UNASSIGNED"){ seg.classList.add('gap'); seg.textContent="UNASSIGNED — assign in Holidays tab"; }
+      else { seg.style.background=CAT_COLOR.Weekend; seg.textContent=cur; }
+      track.appendChild(seg);
+      row.appendChild(rlabel); row.appendChild(track);
+      timeline.appendChild(row);
+    });
+    const legend=document.createElement('div'); legend.className='legend';
+    legend.innerHTML = `<span><i style="background:${CAT_COLOR.Weekend}"></i>Weekend/Holiday</span><span><i style="background:#A63A2E"></i>Unassigned — needs coverage</span>`;
+    timeline.appendChild(legend);
+    const rb = document.getElementById('reliefBody');
+    rb.innerHTML = '<div class="empty">Relief/support staff aren&#39;t used on a holiday or snow day.</div>';
+    return;
+  }
 
   const cats = ["On-Campus","Off-Campus","Night","Weekend"];
   let any=false;
@@ -1560,6 +1653,68 @@ function renderWorkforce(){
       resultEl.innerHTML = `<div class="conflicts"><h3 class="display">Short by ${(need-totalHeadroom).toFixed(1)} hrs/week</h3><p style="font-size:12.5px;margin:0;">Current headroom (${totalHeadroom.toFixed(1)} hrs) doesn't cover a ${need.toFixed(1)}-hr/week route without new hires or schedule changes.</p></div>`;
     }
   };
+
+  renderHolidayPaySummary(el);
+}
+
+// ---------- holidays / snow days (marked inline from Daily Schedule; summarized in Workforce) ----------
+function renderHolidayPaySummary(container){
+  const card = document.createElement('div'); card.className='card';
+  card.innerHTML = `<h2 class="display">Holiday &amp; Snow Day Pay</h2>
+    <p class="note">Full-time staff are paid for these days; part-time are not. Based on a 10-hour paid day, matching your four 10-hour-day full-time schedule. Mark or unmark a day from its Daily Schedule page.</p>
+    <div id="holList"></div>
+    <div id="holPay" style="margin-top:10px;"></div>`;
+  container.appendChild(card);
+
+  const listEl = card.querySelector('#holList');
+  const dates = Object.keys(DATA.holidays).sort();
+  if(dates.length===0){
+    listEl.innerHTML = '<div class="empty">No holidays or snow days marked yet.</div>';
+  } else {
+    dates.forEach(d=>{
+      const h = DATA.holidays[d];
+      const row = document.createElement('div'); row.className='callout-item'; row.style.flexDirection='column'; row.style.alignItems='stretch';
+      const topRow = document.createElement('div'); topRow.style.display='flex'; topRow.style.justifyContent='space-between'; topRow.style.alignItems='center';
+      topRow.innerHTML = `<span><b>${fmtDate(d)}</b> — <span style="color:${h.type==='Snow Day'?'#3E6B8A':(h.type==='Other'?'#55504A':'#C7973F')};font-weight:700;">${h.type}</span>${h.label? ' · '+h.label:''}</span>`;
+      const del = document.createElement('button'); del.className='delbtn'; del.textContent='✕';
+      del.onclick = ()=>{ delete DATA.holidays[d]; saveData(); renderAll(); };
+      topRow.appendChild(del);
+      row.appendChild(topRow);
+
+      const asgRow = document.createElement('div'); asgRow.style.display='flex'; asgRow.style.gap='14px'; asgRow.style.marginTop='6px';
+      ["East WKND","West WKND"].forEach(routeName=>{
+        const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.style.gap='6px';
+        const lbl = document.createElement('span'); lbl.style.fontSize='11px'; lbl.style.color='#8a7d76'; lbl.textContent = routeName+':';
+        const sel = document.createElement('select');
+        const cur = h.assignments[routeName]==="UNASSIGNED" ? "" : h.assignments[routeName];
+        sel.innerHTML = driverOptionsHTML(cur);
+        sel.onchange = ()=>{ h.assignments[routeName] = sel.value.trim() || "UNASSIGNED"; saveData(); renderAll(); };
+        wrap.appendChild(lbl); wrap.appendChild(sel);
+        asgRow.appendChild(wrap);
+      });
+      row.appendChild(asgRow);
+      listEl.appendChild(row);
+    });
+  }
+
+  const payEl = card.querySelector('#holPay');
+  const roster = getRoster();
+  const HOLIDAY_HOURS_PER_DAY = 10; // full-time drivers work four 10-hour days
+  const totalDays = dates.length;
+  if(totalDays===0 || roster.fullTime.length===0){
+    payEl.innerHTML = '<div class="empty">No holiday pay to calculate yet.</div>';
+  } else {
+    payEl.innerHTML = `<div class="hrow"><span><b>Total marked days</b></span><span class="mono">${totalDays}</span></div>`;
+    roster.fullTime.forEach(name=>{
+      const hrs = totalDays * HOLIDAY_HOURS_PER_DAY;
+      const row = document.createElement('div'); row.className='hrow';
+      row.innerHTML = `<span>${name}</span><span class="mono">${hrs} hrs paid</span>`;
+      payEl.appendChild(row);
+    });
+    const ptNote = document.createElement('p'); ptNote.className='note'; ptNote.style.marginTop='8px';
+    ptNote.textContent = `Part-time staff (${roster.partTime.length}) aren't paid for these days and aren't included above.`;
+    payEl.appendChild(ptNote);
+  }
 }
 
 function renderLookup(){
@@ -1638,6 +1793,29 @@ function renderLookup(){
 document.getElementById('modeSubtitle').textContent = READ_ONLY
   ? "View only — ask your dispatcher for changes"
   : "Click any shift to update the schedule";
+
+document.getElementById('saveNowBtn').onclick = async () => {
+  const badge = document.getElementById('saveBadge');
+  const btn = document.getElementById('saveNowBtn');
+  btn.disabled = true; btn.textContent = "Saving…";
+  await saveData();
+  try{
+    const check = await window.storage.get(STORAGE_KEY, true);
+    if(check && check.value){
+      badge.style.color = "#2F6E62";
+      badge.textContent = "✓ Saved and verified in Firebase";
+    } else {
+      badge.style.color = "#A63A2E";
+      badge.textContent = "✗ Save did not verify — check Firebase connection";
+    }
+  }catch(e){
+    badge.style.color = "#A63A2E";
+    badge.textContent = "✗ Could not verify save — check Firebase connection";
+  }
+  btn.disabled = false; btn.textContent = "Save Now";
+  setTimeout(()=>{ if(badge){ badge.textContent=""; badge.style.color=""; } }, 8000);
+};
+
 loadData();
 </script>
 </body>
