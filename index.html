@@ -319,9 +319,14 @@
     west_weekend: {label:"West Wknd/Holiday: HSV PL & Elroy", category:"Weekend/Holiday", stops:["Huntsville Place","Elroy"], schedule:{startHour:8, endHour:18, runHours:[8,11,14,16,18], legs:[
                       {label:"Depart AAMU",offset:20},{label:"Arrive Huntsville Place",offset:40},{label:"Depart Huntsville Place",offset:45},{label:"Arrive Elroy",offset:50},{label:"Depart Elroy",offset:55},{label:"Arrive AAMU",offset:75}]}},
     east_weekend: {label:"East Wknd/Holiday: Dean/Water/Constellation", category:"Weekend/Holiday", stops:["Constellation","Waterleaf","Dean"], schedule:{startHour:8, endHour:18, runHours:[8,11,14,16,18], legs:[
-                      {label:"Depart AAMU",offset:20},{label:"Arrive Constellation",offset:30},{label:"Depart Constellation",offset:35},{label:"Arrive Waterleaf",offset:45},{label:"Depart Waterleaf",offset:50},{label:"Arrive Dean",offset:60},{label:"Depart Dean",offset:65},{label:"Arrive AAMU",offset:75}]}}
+                      {label:"Depart AAMU",offset:20},{label:"Arrive Constellation",offset:30},{label:"Depart Constellation",offset:35},{label:"Arrive Waterleaf",offset:45},{label:"Depart Waterleaf",offset:50},{label:"Arrive Dean",offset:60},{label:"Depart Dean",offset:65},{label:"Arrive AAMU",offset:75}]}},
+    drake:            {label:"Drake", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
+    bulldog:          {label:"Bulldog", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
+    normal_hills:     {label:"Normal Hills", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
+    paratransit:      {label:"Paratransit", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
+    paratransit_night:{label:"Paratransit Night", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:18, endHour:22, legs:[{label:"Depart AAMU",offset:0}]}}
   };
-  const ROUTE_CATEGORIES = ["Day","Night","Weekend/Holiday"];
+  const ROUTE_CATEGORIES = ["On-Campus","Day","Night","Weekend/Holiday"];
   function routeShort(key){ return ROUTES[key].label; }
   function routeGridHtml(selectedKey){
     return ROUTE_CATEGORIES.map(cat=>{
@@ -441,6 +446,41 @@
   function fuelChipsHtml(id, selected){
     return `<div class="fuel-chip-row" id="${id}">${FUEL_LEVELS.map(f=>`<div class="fuel-chip${selected===f?' active':''}" data-fuel="${f}">${f}</div>`).join("")}</div>`;
   }
+
+  // ---- Electric bus fleet: Drake, Bulldog, Normal Hills, Paratransit, Paratransit Night ----
+  const EV_VEHICLES = [
+    {name:"AL-1", capacity:28}, {name:"AL-2", capacity:28}, {name:"AL-3", capacity:28},
+    {name:"AL-5", capacity:28}, {name:"Mini EV", capacity:19}
+  ];
+  const EV_PRETRIP_ITEMS = [
+    "Charge level & estimated range (enough charge for today's route?)",
+    "Charging cable/port condition (no damage, fully disconnected before driving)",
+    "High-voltage system warning lights (any dashboard alerts?)",
+    "Brake warning light & brake performance",
+    "Brake lights, reverse lights & parking brake",
+    "Exterior lights (headlights, signals, hazards, clearance lights)",
+    "Horn",
+    "Steering & wipers/washers",
+    "Mirrors, windshield & windows (clean, unbroken, properly adjusted)",
+    "Tires & wheels (tread, pressure, lug nuts)",
+    "Body condition (new dents, scrapes, damage)",
+    "Interior condition (seats, floor, cleanliness)",
+    "Safety equipment (fire extinguisher, first aid kit, reflectors)"
+  ];
+  const EV_POSTTRIP_ITEMS = [
+    "Did you notice any issues with the brakes during your shift?",
+    "Did you notice any issues with the lights (headlights, signals, hazards, or brake lights)?",
+    "Did you notice any issues with the horn?",
+    "Did you notice any pulling, looseness, or alignment issues with the steering?",
+    "Did you notice any tire issues (pressure, wear, or damage)?",
+    "Did you notice any charging or high-voltage system issues?",
+    "Did you notice any issues with the doors or windows?",
+    "Did any damage occur to this vehicle during your shift?"
+  ];
+  const CHARGE_LEVELS = ["Full","3/4","1/2","1/4","Low"];
+  function chargeChipsHtml(id, selected){
+    return `<div class="fuel-chip-row" id="${id}">${CHARGE_LEVELS.map(f=>`<div class="fuel-chip${selected===f?' active':''}" data-fuel="${f}">${f}</div>`).join("")}</div>`;
+  }
   function wireFuelChips(containerId, onSelect){
     const box = document.getElementById(containerId);
     box.querySelectorAll(".fuel-chip").forEach(chip=>{
@@ -511,6 +551,65 @@
   async function setPin(name, pin){ try{ await window.storage.set("bts-pin-"+normalizeName(name), JSON.stringify({pin, displayName:name.trim()}), true); }catch(e){} }
   async function getVehicleCapacity(vehicleName){ try{ const r = await window.storage.get("bts-vehicle-cap-"+normalizeName(vehicleName), true); return r ? JSON.parse(r.value).capacity : null; } catch(e){ return null; } }
   async function setVehicleCapacity(vehicleName, cap){ try{ await window.storage.set("bts-vehicle-cap-"+normalizeName(vehicleName), JSON.stringify({capacity:cap}), true); }catch(e){} }
+
+  // ---- Master Schedule integration ----
+  // Maps the Master Schedule's route names to this app's ROUTES keys (inverse of the
+  // mapping kept there). Master Schedule also has on-campus routes and Paratransit
+  // Night, which have no equivalent here and are simply left out.
+  const MS_ROUTE_KEY = {
+    "Dean": "dean", "Waterleaf": "waterleaf", "Constellation/Waterleaf/Dean": "combo",
+    "Huntsville Place": "huntsville", "Elroy 1": "elroy1", "Elroy 2": "elroy2",
+    "East Nights": "east_night", "West Nights": "west_night",
+    "East WKND": "east_weekend", "West WKND": "west_weekend",
+    "Drake": "drake", "Bulldog 1": "bulldog", "Normal Hills": "normal_hills",
+    "Paratransit": "paratransit", "Paratransit Night": "paratransit_night"
+  };
+  const MS_DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  function msGetTodayLabel(){ const dow = new Date().getDay(); return MS_DAYS[dow===0?6:dow-1]; }
+  // Fetches the Master Schedule's full data blob straight from Firebase
+  // (path "schedule/aamu-schedule-v2", a sibling of this app's own "data/" path).
+  // Returns null on any failure so callers can fall back to manual selection.
+  async function fetchMasterScheduleData(){
+    try{
+      const snap = await __db.ref('schedule/aamu-schedule-v2').once('value');
+      const raw = snap.val();
+      if(!raw) return null;
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    }catch(e){ return null; }
+  }
+  // Roster for the name picker: {fullTime:[names...], partTime:[names...]}, alphabetized.
+  function msRosterFrom(msData){
+    const ft = [], pt = [];
+    if(!msData || !msData.staffing) return {fullTime:ft, partTime:pt};
+    Object.keys(msData.staffing).forEach(name=>{
+      (msData.staffing[name].employment === "Full-Time" ? ft : pt).push(name);
+    });
+    ft.sort(); pt.sort();
+    return {fullTime:ft, partTime:pt};
+  }
+  // Today's route + lunch assignment for a driver, per the Master Schedule. Checks both
+  // single-shift routes and Bulldog-style split shifts; returns null if nothing matches
+  // (the driver isn't on today's schedule, or the route has no Driver Log equivalent).
+  function msFindAssignment(msData, driverName){
+    if(!msData || !msData.routes) return null;
+    const today = msGetTodayLabel();
+    const norm = (s)=>(s||"").trim().toLowerCase();
+    for(const r of msData.routes){
+      const key = MS_ROUTE_KEY[r.name];
+      if(!key) continue;
+      let matched = false;
+      if(r.days && r.days[today] && norm(r.days[today]).split('/').includes(norm(driverName))) matched = true;
+      if(!matched && r.shifts2 && r.shifts2[today]){
+        matched = r.shifts2[today].some(s => norm(s.driver).split('/').includes(norm(driverName)));
+      }
+      if(matched){
+        const lunch = (r.lunch && r.lunch[today]) ? r.lunch[today] : null;
+        return {routeKey:key, routeName:r.name, lunch};
+      }
+    }
+    return null;
+  }
+
   function blankShift(){ return {pretrip:null, shiftEnded:false, posttrip:null, ridershipSubmitted:false}; }
   async function getShiftRecord(name){
     try{
@@ -575,6 +674,7 @@
     state.myTrip = null; state.myCompletedTrips = [];
     state.shiftRoute=null; state.shiftVehicle=null; state.shiftCapacity=null; state.selectedRouteChoice=null;
     state.shiftRecord=null; state.pretripAnswers={}; state.pretripPhoto=null; state.postTripAnswers={};
+    gateState = {step:'pick', roster:null, query:'', selectedName:''};
     topbar.style.display="none"; driverView.style.display="none"; dispatchView.style.display="none";
     rolePick.style.display="flex";
   }
@@ -634,30 +734,122 @@
   }
 
   // ================= LOGIN =================
-  function renderDriverGate(){
+  let gateState = {step:'pick', roster:null, query:'', selectedName:''};
+
+  async function renderDriverGate(){
+    if(gateState.roster === null){
+      driverView.innerHTML = `<div class="card"><div class="card-label">Driver Sign-In</div><div style="color:var(--muted);font-size:13px;">Loading driver list&hellip;</div></div>`;
+      const msData = await fetchMasterScheduleData();
+      gateState.roster = msRosterFrom(msData);
+      gateState.msData = msData;
+    }
+    if(gateState.step === 'pick') return renderGatePick();
+    if(gateState.step === 'confirm') return renderGateConfirm();
+    if(gateState.step === 'pin-create') return renderGatePinCreate();
+    if(gateState.step === 'pin-enter') return renderGatePinEnter();
+  }
+
+  function gateNameListHtml(){
+    const q = gateState.query.trim().toLowerCase();
+    const filterNames = (names)=> q ? names.filter(n=>n.toLowerCase().includes(q)) : names;
+    const ft = filterNames(gateState.roster.fullTime);
+    const pt = filterNames(gateState.roster.partTime);
+    if(ft.length===0 && pt.length===0){
+      return `<div style="color:var(--muted);font-size:13px;padding:8px 0;">No driver matches "${gateState.query}".</div>`;
+    }
+    const rowHtml = (n)=>`<div class="big-route-btn gate-name-opt" data-name="${n}" style="min-height:auto;padding:10px 12px;text-transform:none;font-size:14px;text-align:left;justify-content:flex-start;margin-bottom:6px;">${n}</div>`;
+    let html = '';
+    if(ft.length){ html += `<div style="font-size:10.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin:6px 0 4px;">Full-Time</div>` + ft.map(rowHtml).join(''); }
+    if(pt.length){ html += `<div style="font-size:10.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin:10px 0 4px;">Part-Time</div>` + pt.map(rowHtml).join(''); }
+    return html;
+  }
+
+  function renderGatePick(){
     driverView.innerHTML = `
       <div class="card">
         <div class="card-label">Driver Sign-In</div>
-        <div class="field-row">
-          <div class="field"><label>Driver Name</label><input id="gate-name" placeholder="Your name"></div>
-          <div class="field"><label>PIN</label><input id="gate-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN"></div>
-        </div>
-        <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px;">First time? Just pick any 4-digit PIN — it'll be remembered for next time.</div>
-        <div id="gate-err" style="color:var(--alert-red);font-size:12px;margin-bottom:6px;"></div>
-        <button class="btn btn-primary" id="gate-login">Login</button>
+        <div class="field"><label>Who's signing in?</label><input id="gate-search" placeholder="Search your name…" autocomplete="off" value="${gateState.query}"></div>
+        <div id="gate-name-list" style="max-height:340px;overflow-y:auto;margin-top:8px;">${gateNameListHtml()}</div>
+        <div id="gate-err" style="color:var(--alert-red);font-size:12px;margin-top:6px;"></div>
       </div>
     `;
-    document.getElementById("gate-login").onclick = async () => {
-      const name = document.getElementById("gate-name").value.trim();
-      const pin = document.getElementById("gate-pin").value.trim();
-      if(!name){ document.getElementById("gate-err").textContent = "Enter your name."; return; }
+    const search = document.getElementById("gate-search");
+    search.focus();
+    search.oninput = () => { gateState.query = search.value; document.getElementById("gate-name-list").innerHTML = gateNameListHtml(); wireGateNameOpts(); };
+    wireGateNameOpts();
+    function wireGateNameOpts(){
+      document.querySelectorAll(".gate-name-opt").forEach(opt=>{
+        opt.onclick = () => { gateState.selectedName = opt.dataset.name; gateState.step = 'confirm'; renderDriverGate(); };
+      });
+    }
+  }
+
+  function renderGateConfirm(){
+    driverView.innerHTML = `
+      <div class="card" style="max-width:380px;margin:20px auto;text-align:center;">
+        <div class="card-label">Confirm</div>
+        <div style="font-size:12.5px;color:var(--muted);margin-top:10px;">You selected</div>
+        <div style="font-size:20px;font-weight:800;color:var(--maroon-dark);margin:6px 0 4px;">${gateState.selectedName}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">Is this you?</div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-primary" id="gate-confirm-yes" style="flex:1;">Yes, it's me</button>
+          <button class="btn" id="gate-confirm-no" style="flex:1;">No, back</button>
+        </div>
+      </div>
+    `;
+    document.getElementById("gate-confirm-no").onclick = () => { gateState.step = 'pick'; renderDriverGate(); };
+    document.getElementById("gate-confirm-yes").onclick = async () => {
+      const rec = await getPinRecord(gateState.selectedName);
+      gateState.step = rec ? 'pin-enter' : 'pin-create';
+      renderDriverGate();
+    };
+  }
+
+  function renderGatePinCreate(){
+    driverView.innerHTML = `
+      <div class="card" style="max-width:380px;margin:20px auto;">
+        <div class="card-label">No PIN on file yet</div>
+        <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px;">Choose a 4-digit PIN, ${gateState.selectedName} — you'll use this every time you sign in.</div>
+        <div class="field"><input id="gate-pin-new" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN"></div>
+        <div id="gate-err" style="color:var(--alert-red);font-size:12px;margin:6px 0;"></div>
+        <button class="btn btn-primary" id="gate-pin-create-btn" style="width:100%;">Set PIN &amp; Continue</button>
+      </div>
+    `;
+    const input = document.getElementById("gate-pin-new");
+    input.focus();
+    document.getElementById("gate-pin-create-btn").onclick = async () => {
+      const pin = input.value.trim();
       if(!/^\d{4}$/.test(pin)){ document.getElementById("gate-err").textContent = "PIN must be 4 digits."; return; }
-      const btn = document.getElementById("gate-login"); btn.disabled = true; btn.textContent = "Checking…";
-      const rec = await getPinRecord(name);
-      if(rec == null){ await setPin(name, pin); await unlockDriver(name); return; }
-      if(pin === rec.pin){ await unlockDriver(rec.displayName || name); return; }
-      btn.disabled = false; btn.textContent = "Login";
+      await setPin(gateState.selectedName, pin);
+      const name = gateState.selectedName;
+      gateState = {step:'pick', roster:null, query:'', selectedName:''};
+      await unlockDriver(name);
+    };
+  }
+
+  function renderGatePinEnter(){
+    driverView.innerHTML = `
+      <div class="card" style="max-width:380px;margin:20px auto;">
+        <div class="card-label">Welcome back, ${gateState.selectedName}</div>
+        <div class="field"><label>Enter your PIN</label><input id="gate-pin-existing" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN"></div>
+        <div id="gate-err" style="color:var(--alert-red);font-size:12px;margin:6px 0;"></div>
+        <button class="btn btn-primary" id="gate-pin-enter-btn" style="width:100%;">Login</button>
+        <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:10px;">Forgot your PIN? See dispatch.</div>
+      </div>
+    `;
+    const input = document.getElementById("gate-pin-existing");
+    input.focus();
+    document.getElementById("gate-pin-enter-btn").onclick = async () => {
+      const pin = input.value.trim();
+      const rec = await getPinRecord(gateState.selectedName);
+      if(rec && pin === rec.pin){
+        const name = rec.displayName || gateState.selectedName;
+        gateState = {step:'pick', roster:null, query:'', selectedName:''};
+        await unlockDriver(name);
+        return;
+      }
       document.getElementById("gate-err").textContent = "Incorrect PIN. Try again.";
+      input.value = '';
     };
   }
 
@@ -686,6 +878,9 @@
       state.selectedRouteChoice = cs0.pretrip.route;
     }
     state.pretripAnswers = {}; state.pretripPhoto = null; state.pretripFuel = null; state.posttripFuel = null; state.postTripAnswers = {};
+    const msData = await fetchMasterScheduleData();
+    state.msAssignment = msFindAssignment(msData, name);
+    if(state.msAssignment && !state.selectedRouteChoice) state.selectedRouteChoice = state.msAssignment.routeKey;
     logDriverSignIn(name);
     await renderDriverHome();
   }
@@ -709,7 +904,11 @@
       if(!cs.posttrip || !cs.posttrip.done){ renderPostTripPage(); return; }
       renderDaySummaryPage(); return;
     }
-    if(state.myTrip && !state.myTrip.complete){ renderLogPage(); return; }
+    if(state.myTrip && !state.myTrip.complete){
+      const routeDef = ROUTES[state.myTrip.route];
+      if(routeDef && routeDef.simplified){ renderSimpleTripPage(); return; }
+      renderLogPage(); return;
+    }
     renderPretripPage();
   }
 
@@ -717,33 +916,58 @@
   function renderPretripPage(){
     const lock = state.driverLock;
     const already = !!(currentShift().pretrip && currentShift().pretrip.done);
+    const asg = state.msAssignment;
+    const routeDef = ROUTES[state.selectedRouteChoice];
+    const isEV = !!(routeDef && routeDef.simplified);
+    const items = isEV ? EV_PRETRIP_ITEMS : PRETRIP_ITEMS;
     driverView.innerHTML = `
       <div class="card">
         <div class="card-label">Driver <button class="link-btn" id="change-driver-btn">Change Driver</button></div>
         <div style="font-weight:800;font-size:16px;color:var(--maroon-dark);">${lock.name}</div>
         <div class="mono" style="margin-bottom:10px;">${todayDisplay()}</div>
         <div class="field-row">
-          <div class="field"><label>Vehicle</label><input id="d-vehicle" value="${state.shiftVehicle||lock.vehicle||''}" placeholder="Van # or borrowed vehicle name"></div>
+          <div class="field"><label>Vehicle</label>
+            ${isEV
+              ? `<select id="d-vehicle">
+                   <option value="">Select a vehicle…</option>
+                   ${EV_VEHICLES.map(v=>`<option value="${v.name}" ${state.shiftVehicle===v.name?'selected':''}>${v.name}</option>`).join("")}
+                 </select>`
+              : `<input id="d-vehicle" value="${state.shiftVehicle||lock.vehicle||''}" placeholder="Van # or borrowed vehicle name">`}
+          </div>
           <div class="field"><label>Capacity</label><input id="d-capacity" type="number" min="1" value="${state.shiftCapacity||DEFAULT_CAPACITY}"></div>
         </div>
+        ${isEV ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Pick whichever bus is actually charged and available — your assignment may change if the vehicle you expected isn't ready.</div>` : ``}
       </div>
+      ${asg ? `
+      <div class="card" style="background:#EEF6F1;border-color:#2F6E62;">
+        <div style="font-size:10px;font-weight:800;color:#2F6E62;text-transform:uppercase;letter-spacing:0.04em;">Today's Assignment</div>
+        <div style="font-size:18px;font-weight:800;color:var(--maroon-dark);margin:4px 0 2px;">${routeShort(asg.routeKey)}</div>
+        <div style="font-size:11px;color:var(--muted);">Set by dispatch · Master Schedule</div>
+        ${asg.lunch ? `
+        <div style="background:#FBF3E1;border:1px solid #C7973F;border-radius:10px;padding:10px 12px;text-align:center;margin-top:10px;">
+          <div style="font-size:9.5px;color:#8a7d76;text-transform:uppercase;letter-spacing:0.04em;font-weight:800;">Lunch Today</div>
+          <div style="font-size:15px;font-weight:800;color:var(--maroon-dark);margin:3px 0 1px;">${asg.lunch.time ? fmtClock((parseInt(asg.lunch.time.split(':')[0],10)*60)+parseInt(asg.lunch.time.split(':')[1],10)) : '—'}</div>
+          <div style="font-size:11px;color:#55504A;">Relief: ${asg.lunch.driver || 'not yet assigned'}</div>
+        </div>` : ``}
+      </div>` : ``}
       <div class="card">
         <div class="card-label">Pick Route</div>
         <div id="route-grid"></div>
         <div class="disclosure" id="pretrip-next-run" style="display:none;"></div>
+        ${isEV ? `<div style="font-size:11px;color:var(--muted);margin-top:8px;">This route logs a total passenger count on Post-Trip instead of counting at each stop — just Pre-Trip now, drive your route, then Post-Trip when you're done.</div>` : ``}
       </div>
       <div class="card">
         <div class="card-label">Pre-Trip Inspection</div>
         ${already
           ? `<div class="disclosure">✓ Pre-trip completed today at ${fmtSysTime(currentShift().pretrip.completedAt)}${currentShift().pretrip.checklist.some(c=>c.status==='bad')?' — issue(s) were reported.':''}</div>
              <div class="info-row"><span>Starting Mileage</span><strong>${currentShift().pretrip.startingMileage||'—'}</strong></div>
-             <div class="info-row"><span>Starting Fuel</span><strong>${currentShift().pretrip.startingFuel||'—'}</strong></div>`
+             <div class="info-row"><span>Starting ${isEV?'Charge':'Fuel'}</span><strong>${currentShift().pretrip.startingFuel||'—'}</strong></div>`
           : `<div class="field-row">
                <div class="field"><label>Starting Mileage</label><input id="pt-mileage" type="number" min="0" placeholder="Odometer reading"></div>
              </div>
              <div class="pt-item">
-               <div class="pt-item-label">Starting Fuel Level</div>
-               ${fuelChipsHtml("pt-fuel-chips", state.pretripFuel)}
+               <div class="pt-item-label">Starting ${isEV?'Charge':'Fuel'} Level</div>
+               ${isEV ? chargeChipsHtml("pt-fuel-chips", state.pretripFuel) : fuelChipsHtml("pt-fuel-chips", state.pretripFuel)}
              </div>
              <div id="pretrip-items"></div>
              <div class="pt-item">
@@ -756,8 +980,16 @@
       <button class="btn btn-primary big-log-btn" id="begin-route-btn">BEGIN ROUTE</button>
     `;
     const vInput = document.getElementById("d-vehicle");
-    vInput.onblur = async () => { const cap = await getVehicleCapacity(vInput.value.trim()); if(cap) document.getElementById("d-capacity").value = cap; };
-    vInput.oninput = () => { if(vInput.value.trim()) vInput.classList.remove("pt-error-field"); };
+    if(isEV){
+      vInput.onchange = () => {
+        vInput.classList.remove("pt-error-field");
+        const found = EV_VEHICLES.find(v=>v.name===vInput.value);
+        if(found) document.getElementById("d-capacity").value = found.capacity;
+      };
+    } else {
+      vInput.onblur = async () => { const cap = await getVehicleCapacity(vInput.value.trim()); if(cap) document.getElementById("d-capacity").value = cap; };
+      vInput.oninput = () => { if(vInput.value.trim()) vInput.classList.remove("pt-error-field"); };
+    }
 
     const grid = document.getElementById("route-grid");
     grid.innerHTML = routeGridHtml(state.selectedRouteChoice);
@@ -770,13 +1002,13 @@
     showNextRun(state.selectedRouteChoice);
     wireRouteGrid(grid, (key) => {
       state.selectedRouteChoice = key;
-      grid.style.outline = "";
-      showNextRun(key);
+      state.pretripAnswers = {}; // question sets differ between EV and standard routes
+      renderPretripPage();
     });
 
     if(!already){
       const itemsBox = document.getElementById("pretrip-items");
-      itemsBox.innerHTML = PRETRIP_ITEMS.map((item,i)=>`
+      itemsBox.innerHTML = items.map((item,i)=>`
         <div class="pt-item">
           <div class="pt-item-label">${item}</div>
           <div class="pt-btns" data-idx="${i}">
@@ -816,10 +1048,11 @@
     }
 
     document.getElementById("change-driver-btn").onclick = () => logoutDriver();
-    document.getElementById("begin-route-btn").onclick = async () => { await beginRoute(already); };
+    document.getElementById("begin-route-btn").onclick = async () => { await beginRoute(already, items); };
   }
 
-  async function beginRoute(already){
+  async function beginRoute(already, items){
+    items = items || PRETRIP_ITEMS;
     document.getElementById("route-grid").style.outline = "";
     document.getElementById("d-vehicle").classList.remove("pt-error-field");
     const vehicle = document.getElementById("d-vehicle").value.trim();
@@ -845,7 +1078,7 @@
       const fuelBox = document.getElementById("pt-fuel-chips");
       if(!state.pretripFuel){ fuelBox.classList.add("pt-error-field"); firstError = firstError || fuelBox; }
 
-      PRETRIP_ITEMS.forEach((_,i)=>{
+      items.forEach((_,i)=>{
         const itemEl = document.getElementById("ptx-explain-"+i).closest(".pt-item");
         const answered = !!state.pretripAnswers[i];
         const needsExplain = state.pretripAnswers[i]==='bad' && !document.getElementById("ptx-explain-"+i).value.trim();
@@ -853,7 +1086,7 @@
         else { itemEl.classList.remove("pt-error"); }
       });
 
-      if(!mileage || !state.pretripFuel || PRETRIP_ITEMS.some((_,i)=> !state.pretripAnswers[i] || (state.pretripAnswers[i]==='bad' && !document.getElementById("ptx-explain-"+i).value.trim()))){
+      if(!mileage || !state.pretripFuel || items.some((_,i)=> !state.pretripAnswers[i] || (state.pretripAnswers[i]==='bad' && !document.getElementById("ptx-explain-"+i).value.trim()))){
         if(firstError) firstError.scrollIntoView({behavior:"smooth", block:"center"});
         return;
       }
@@ -865,7 +1098,7 @@
 
     if(!already){
       const mileage = document.getElementById("pt-mileage").value.trim();
-      const checklist = PRETRIP_ITEMS.map((item,i)=>({item, status:state.pretripAnswers[i], note: state.pretripAnswers[i]==='bad' ? document.getElementById("ptx-explain-"+i).value.trim() : ""}));
+      const checklist = items.map((item,i)=>({item, status:state.pretripAnswers[i], note: state.pretripAnswers[i]==='bad' ? document.getElementById("ptx-explain-"+i).value.trim() : ""}));
       currentShift().pretrip = {done:true, route:state.selectedRouteChoice, vehicle, capacity, startingMileage:mileage, startingFuel:state.pretripFuel, checklist, photo: state.pretripPhoto||null, completedAt:new Date().toISOString()};
       await saveShiftRecord(state.driverLock.name, state.shiftRecord);
     }
@@ -887,7 +1120,25 @@
     state.myTrip = trip;
     await syncTrip(trip);
     state.stopPhase='depart_campus'; state.pendingStop=null; state.divertedName='';
-    renderLogPage();
+    const routeDef = ROUTES[state.shiftRoute];
+    if(routeDef && routeDef.simplified){ renderSimpleTripPage(); }
+    else { renderLogPage(); }
+  }
+
+  // ================= SIMPLIFIED EV ROUTE (no per-stop logging) =================
+  function renderSimpleTripPage(){
+    const trip = state.myTrip;
+    driverView.innerHTML = `
+      <div class="card">
+        <div class="card-label">En Route</div>
+        <div class="headsign">${routeShort(trip.route)}</div>
+        <div class="info-row"><span>Driver</span><strong>${trip.driver}</strong></div>
+        <div class="info-row"><span>Vehicle</span><strong>${trip.vehicle}</strong></div>
+        <div style="font-size:12px;color:var(--muted);margin-top:10px;">No stop-by-stop logging on this route — when you're done for the day, tap below and enter your total passenger count on Post-Trip.</div>
+      </div>
+      <button class="btn btn-primary big-log-btn" id="end-simple-route-btn">END ROUTE</button>
+    `;
+    document.getElementById("end-simple-route-btn").onclick = () => endShift();
   }
 
   // ================= LOG PAGE =================
@@ -1322,13 +1573,18 @@
 
   // ================= POST-TRIP PAGE =================
   function renderPostTripPage(){
+    const lastTrip = state.myCompletedTrips[state.myCompletedTrips.length-1];
+    const routeDef = lastTrip ? ROUTES[lastTrip.route] : null;
+    const isEV = !!(routeDef && routeDef.simplified);
+    const items = isEV ? EV_POSTTRIP_ITEMS : POSTTRIP_ITEMS;
     driverView.innerHTML = `
       <div class="card">
         <div class="card-label">Post-Trip Inspection</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Please answer each question before submitting.</div>
+        ${isEV ? `<div class="field"><label>Total Passengers This Shift</label><input id="pp-total-passengers" type="number" min="0" placeholder="Everyone who boarded today"></div>` : ``}
         <div class="pt-item">
-          <div class="pt-item-label">Ending Fuel Level</div>
-          ${fuelChipsHtml("pp-fuel-chips", state.posttripFuel)}
+          <div class="pt-item-label">Ending ${isEV?'Charge':'Fuel'} Level</div>
+          ${isEV ? chargeChipsHtml("pp-fuel-chips", state.posttripFuel) : fuelChipsHtml("pp-fuel-chips", state.posttripFuel)}
         </div>
         <div id="posttrip-items"></div>
         <button class="btn btn-primary big-log-btn" id="submit-posttrip-btn" style="margin-top:10px;">SUBMIT POST-TRIP</button>
@@ -1336,7 +1592,7 @@
     `;
     wireFuelChips("pp-fuel-chips", f => { state.posttripFuel = f; });
     const box = document.getElementById("posttrip-items");
-    box.innerHTML = POSTTRIP_ITEMS.map((q,i)=>`
+    box.innerHTML = items.map((q,i)=>`
       <div class="pt-item">
         <div class="pt-item-label">${q}</div>
         <div class="pt-btns" data-idx="${i}">
@@ -1359,16 +1615,21 @@
       });
     });
     document.getElementById("submit-posttrip-btn").onclick = async () => {
-      const missingQuestions = POSTTRIP_ITEMS.some((_,i)=> !state.postTripAnswers[i]);
+      const missingQuestions = items.some((_,i)=> !state.postTripAnswers[i]);
       const missingFuel = !state.posttripFuel;
+      const totalInput = document.getElementById("pp-total-passengers");
+      const missingTotal = isEV && (!totalInput || !totalInput.value.trim());
       if(missingFuel) document.getElementById("pp-fuel-chips").classList.add("pt-error-field");
-      if(missingQuestions || missingFuel){
-        alert("Please complete every item — including fuel level — before submitting.");
-        if(missingFuel) document.getElementById("pp-fuel-chips").scrollIntoView({behavior:"smooth", block:"center"});
+      if(missingTotal) totalInput.classList.add("pt-error-field");
+      if(missingQuestions || missingFuel || missingTotal){
+        alert(`Please complete every item — including ${isEV?'charge level and total passengers':'fuel level'} — before submitting.`);
+        if(missingTotal) totalInput.scrollIntoView({behavior:"smooth", block:"center"});
+        else if(missingFuel) document.getElementById("pp-fuel-chips").scrollIntoView({behavior:"smooth", block:"center"});
         return;
       }
-      const answers = POSTTRIP_ITEMS.map((q,i)=>({question:q, answer:state.postTripAnswers[i], note: state.postTripAnswers[i]==='yes' ? (document.getElementById("pp-explain-"+i).value||"") : ""}));
+      const answers = items.map((q,i)=>({question:q, answer:state.postTripAnswers[i], note: state.postTripAnswers[i]==='yes' ? (document.getElementById("pp-explain-"+i).value||"") : ""}));
       currentShift().posttrip = {done:true, answers, endingFuel:state.posttripFuel, completedAt:new Date().toISOString()};
+      if(isEV) currentShift().posttrip.totalPassengers = parseInt(totalInput.value,10) || 0;
       await saveShiftRecord(state.driverLock.name, state.shiftRecord);
       renderDaySummaryPage();
     };
@@ -2045,6 +2306,15 @@
                 `).join("");
               })()}
             </div>
+            <div class="card">
+              <div class="card-label">Reset a Driver PIN</div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">This clears their PIN only — it doesn't show or set what it becomes. They'll pick a new one next time they sign in.</div>
+              <div class="field-row">
+                <div class="field"><input id="pin-reset-name" placeholder="Driver name"></div>
+                <button class="btn" id="pin-reset-btn">Reset PIN</button>
+              </div>
+              <div id="pin-reset-msg" style="font-size:11.5px;margin-top:6px;"></div>
+            </div>
           </div>
           <div class="dispatch-routes">
             ${ROUTE_BOX_ROWS.map(row=>routeRowHtml(row, trips)).join("")}
@@ -2053,6 +2323,18 @@
       </div>
     `;
 
+    document.getElementById("pin-reset-btn").onclick = async () => {
+      const name = document.getElementById("pin-reset-name").value.trim();
+      const msgEl = document.getElementById("pin-reset-msg");
+      if(!name){ msgEl.style.color = "var(--alert-red)"; msgEl.textContent = "Enter a driver name."; return; }
+      try{
+        await window.storage.delete("bts-pin-"+normalizeName(name), true);
+        msgEl.style.color = "#2F6E62"; msgEl.textContent = `PIN cleared for ${name}. They'll set a new one next login.`;
+        document.getElementById("pin-reset-name").value = "";
+      }catch(e){
+        msgEl.style.color = "var(--alert-red)"; msgEl.textContent = "Couldn't reset — try again.";
+      }
+    };
     document.querySelectorAll("[data-expand]").forEach(el=>{
       el.onclick = () => {
         const k = el.dataset.expand;
