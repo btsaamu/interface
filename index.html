@@ -245,6 +245,8 @@
   .pt-btn.sel-na{background:var(--muted);color:white;border-color:var(--muted);}
   .pt-explain{width:100%;margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:13px;}
   .pt-item.pt-error{border:2px solid var(--alert-red);border-radius:8px;padding:10px;background:#FCEAE6;}
+  .check-row.pt-error{border-bottom-color:var(--alert-red);}
+  .check-row.pt-error .qs-box{border-color:var(--alert-red)!important;}
   .pt-error-field{border:2px solid var(--alert-red) !important;background:#FCEAE6 !important;}
   .fuel-chip-row{display:flex;gap:6px;flex-wrap:wrap;border-radius:8px;padding:2px;}
   .fuel-chip{flex:1;min-width:52px;text-align:center;padding:10px 6px;border:2px solid var(--line);border-radius:8px;background:white;font-weight:800;font-size:13px;cursor:pointer;color:var(--ink);}
@@ -279,6 +281,7 @@
     </div>
     <div class="top-actions">
       <span id="pending-badge"></span>
+      <a id="bts-schedule-link" href="#" target="_blank" rel="noopener" class="bts-switch" style="display:none;text-decoration:none;">Master Schedule</a>
       <button class="bts-switch" id="bts-switch-role">Switch Role</button>
     </div>
   </div>
@@ -452,21 +455,43 @@
     {name:"AL-1", capacity:28}, {name:"AL-2", capacity:28}, {name:"AL-3", capacity:28},
     {name:"AL-5", capacity:28}, {name:"Mini EV", capacity:19}
   ];
-  const EV_PRETRIP_ITEMS = [
-    "Charge level & estimated range (enough charge for today's route?)",
-    "Charging cable/port condition (no damage, fully disconnected before driving)",
-    "High-voltage system warning lights (any dashboard alerts?)",
-    "Brake warning light & brake performance",
-    "Brake lights, reverse lights & parking brake",
-    "Exterior lights (headlights, signals, hazards, clearance lights)",
-    "Horn",
-    "Steering & wipers/washers",
-    "Mirrors, windshield & windows (clean, unbroken, properly adjusted)",
-    "Tires & wheels (tread, pressure, lug nuts)",
-    "Body condition (new dents, scrapes, damage)",
-    "Interior condition (seats, floor, cleanliness)",
-    "Safety equipment (fire extinguisher, first aid kit, reflectors)"
+  const EV_QUICK_START_STEPS = [
+    "Exterior panels check",
+    "Curbside rear access panel check",
+    "Vehicle Master Disconnect ON",
+    "Front passenger button (hold to open doors)",
+    "Start switch (start button)"
   ];
+  const EV_PRETRIP_SECTIONS = [
+    { label: "Dashboard & Cab Check", note: "Once started, before pulling out.", items: [
+      "Dashboard gauges",
+      "Dashboard miscellaneous icons",
+      "Dashboard upper symbols"
+    ]},
+    { label: "Exterior Walk-Around", items: [
+      "Mirrors and front windows: clean, unbroken, adjustable?",
+      "Wheels (tire tread, depth, uniformity, lug nuts)",
+      "Lights: Low and high beam",
+      "Lights: Turn signal (left and right)",
+      "Lights: Brake warning and reverse",
+      "Horn (listen for both tones)",
+      "Wipers and washers (both speeds, look, leaks, aim)",
+      "Cleanliness: Exterior"
+    ]},
+    { label: "Brakes, Air & Safety Systems", items: [
+      "Air supply check",
+      "Brakes: Pulling or grabbing?",
+      "Brakes: Emergency brake",
+      "Lift (operates? loose joints or binding?)",
+      "Emergency door (buzzer sound, ease of opening)",
+      "Safety equipment (fire extinguisher, first aid kit, reflectors)"
+    ]},
+    { label: "Interior", items: [
+      "Cleanliness: Interior",
+      "Cleanliness: Trash taken out"
+    ]}
+  ];
+  const EV_PRETRIP_ITEMS = EV_PRETRIP_SECTIONS.flatMap(s=>s.items);
   const EV_POSTTRIP_ITEMS = [
     "Did you notice any issues with the brakes during your shift?",
     "Did you notice any issues with the lights (headlights, signals, hazards, or brake lights)?",
@@ -648,9 +673,10 @@
   }
 
   let state = {
-    role:null, driverProfile:{}, driverLock:{status:'locked', name:'', vehicle:''},
+    role:null, driverProfile:{}, driverLock:{status:'locked', name:'', vehicle:''}, dispatchPassword:null,
     myTrip:null, myCompletedTrips:[], shiftRoute:null, shiftVehicle:null, shiftCapacity:null,
     selectedRouteChoice:null, pretripAnswers:{}, pretripPhoto:null, pretripFuel:null, posttripFuel:null, postTripAnswers:{}, shiftRecord:null,
+    quickStartChecks:{}, pretripDamage:null, routeGridExpanded:false,
     stopPhase:'arriving', pendingStop:null, divertedName:'',
     pendingIds:new Set(), changingRoute:false,
     dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(), lastSignIns:[], lastSignInSearch:null, lastConsolidatedSearch:null,
@@ -674,9 +700,11 @@
     state.myTrip = null; state.myCompletedTrips = [];
     state.shiftRoute=null; state.shiftVehicle=null; state.shiftCapacity=null; state.selectedRouteChoice=null;
     state.shiftRecord=null; state.pretripAnswers={}; state.pretripPhoto=null; state.postTripAnswers={};
+    state.dispatchPassword = null;
     gateState = {step:'pick', roster:null, query:'', selectedName:''};
     topbar.style.display="none"; driverView.style.display="none"; dispatchView.style.display="none";
     rolePick.style.display="flex";
+    updateScheduleLink();
   }
 
   async function enterRole(role){
@@ -720,17 +748,31 @@
       if(!pw){ document.getElementById("dispatch-pw-err").textContent = "Enter a password."; return; }
       if(!existing){
         await setDispatchPassword(pw);
+        state.dispatchPassword = pw;
+        updateScheduleLink();
         await refreshDispatch();
         state.pollHandle = setInterval(refreshDispatch, 5000);
         return;
       }
       if(pw === existing){
+        state.dispatchPassword = pw;
+        updateScheduleLink();
         await refreshDispatch();
         state.pollHandle = setInterval(refreshDispatch, 5000);
       } else {
         document.getElementById("dispatch-pw-err").textContent = "Incorrect password.";
       }
     };
+  }
+  function updateScheduleLink(){
+    const link = document.getElementById("bts-schedule-link");
+    if(!link) return;
+    if(state.role === "dispatch" && state.dispatchPassword){
+      link.href = "schedule.html?auth=" + encodeURIComponent(state.dispatchPassword);
+      link.style.display = "";
+    } else {
+      link.style.display = "none";
+    }
   }
 
   // ================= LOGIN =================
@@ -878,6 +920,7 @@
       state.selectedRouteChoice = cs0.pretrip.route;
     }
     state.pretripAnswers = {}; state.pretripPhoto = null; state.pretripFuel = null; state.posttripFuel = null; state.postTripAnswers = {};
+    state.quickStartChecks = {}; state.pretripDamage = null; state.routeGridExpanded = false;
     const msData = await fetchMasterScheduleData();
     state.msAssignment = msFindAssignment(msData, name);
     if(state.msAssignment && !state.selectedRouteChoice) state.selectedRouteChoice = state.msAssignment.routeKey;
@@ -949,32 +992,55 @@
           <div style="font-size:15px;font-weight:800;color:var(--maroon-dark);margin:3px 0 1px;">${asg.lunch.time ? fmtClock((parseInt(asg.lunch.time.split(':')[0],10)*60)+parseInt(asg.lunch.time.split(':')[1],10)) : '—'}</div>
           <div style="font-size:11px;color:#55504A;">Relief: ${asg.lunch.driver || 'not yet assigned'}</div>
         </div>` : ``}
+        ${!already && !state.routeGridExpanded ? `<div style="text-align:center;margin-top:10px;"><button class="link-btn" id="show-route-grid-btn">Not right? Change route</button></div>` : ``}
       </div>` : ``}
+      ${(!asg || state.routeGridExpanded || already) ? `
       <div class="card">
         <div class="card-label">Pick Route</div>
+        ${asg && state.routeGridExpanded && !already ? `<div style="font-size:11px;color:var(--warn-orange);margin-bottom:8px;">Picking anything other than <strong>${routeShort(asg.routeKey)}</strong> notifies dispatch.</div>` : ``}
         <div id="route-grid"></div>
         <div class="disclosure" id="pretrip-next-run" style="display:none;"></div>
         ${isEV ? `<div style="font-size:11px;color:var(--muted);margin-top:8px;">This route logs a total passenger count on Post-Trip instead of counting at each stop — just Pre-Trip now, drive your route, then Post-Trip when you're done.</div>` : ``}
       </div>
+      ` : ``}
       <div class="card">
         <div class="card-label">Pre-Trip Inspection</div>
         ${already
-          ? `<div class="disclosure">✓ Pre-trip completed today at ${fmtSysTime(currentShift().pretrip.completedAt)}${currentShift().pretrip.checklist.some(c=>c.status==='bad')?' — issue(s) were reported.':''}</div>
-             <div class="info-row"><span>Starting Mileage</span><strong>${currentShift().pretrip.startingMileage||'—'}</strong></div>
-             <div class="info-row"><span>Starting ${isEV?'Charge':'Fuel'}</span><strong>${currentShift().pretrip.startingFuel||'—'}</strong></div>`
+          ? `<div class="disclosure">✓ Pre-trip completed today at ${fmtSysTime(currentShift().pretrip.completedAt)}${currentShift().pretrip.checklist.some(c=>c.status==='bad')?' — issue(s) were reported.':''}${currentShift().pretrip.damage && currentShift().pretrip.damage.reported?' — damage was reported.':''}</div>
+             <div class="info-row"><span>${isEV?'Beginning Odometer':'Starting Mileage'}</span><strong>${currentShift().pretrip.startingMileage||'—'}</strong></div>
+             <div class="info-row"><span>${isEV?'Beginning Charge':'Starting Fuel'}</span><strong>${currentShift().pretrip.startingFuel||'—'}</strong></div>`
           : `<div class="field-row">
-               <div class="field"><label>Starting Mileage</label><input id="pt-mileage" type="number" min="0" placeholder="Odometer reading"></div>
+               <div class="field"><label>${isEV?'Beginning Odometer':'Starting Mileage'}</label><input id="pt-mileage" type="number" min="0" placeholder="Odometer reading"></div>
              </div>
              <div class="pt-item">
-               <div class="pt-item-label">Starting ${isEV?'Charge':'Fuel'} Level</div>
+               <div class="pt-item-label">${isEV?'Beginning Charge':'Starting Fuel Level'}</div>
                ${isEV ? chargeChipsHtml("pt-fuel-chips", state.pretripFuel) : fuelChipsHtml("pt-fuel-chips", state.pretripFuel)}
              </div>
+             ${isEV ? `<div class="card" style="margin:14px -16px -14px -16px;border-radius:0 0 12px 12px;border-top:1px solid var(--line);">
+               <div class="card-label" style="margin-top:2px;">Quick Start Procedure</div>
+               <div style="font-size:11px;color:var(--muted);margin:-4px 0 8px;">Check off each step as you complete it, in order.</div>
+               <div id="quick-start-list"></div>
+             </div>` : ``}
              <div id="pretrip-items"></div>
+             ${isEV ? `
+             <div class="pt-item">
+               <div class="pt-item-label">Any new or noticeable damage?</div>
+               <div class="pt-btns" id="damage-yn">
+                 <button class="pt-btn" data-val="no">No</button>
+                 <button class="pt-btn" data-val="yes">Yes</button>
+               </div>
+               <div id="damage-explain-wrap" style="display:none;margin-top:8px;">
+                 <input type="text" class="pt-explain" id="damage-explain" placeholder="Explain the damage" style="display:block;">
+                 <label style="font-size:11.5px;color:var(--muted);display:block;margin:8px 0 4px;">Attach a photo</label>
+                 <input type="file" accept="image/*" capture="environment" id="pt-photo">
+                 <div id="pt-photo-preview"></div>
+               </div>
+             </div>` : `
              <div class="pt-item">
                <div class="pt-item-label">Photo of any damage (optional)</div>
                <input type="file" accept="image/*" capture="environment" id="pt-photo">
                <div id="pt-photo-preview"></div>
-             </div>`
+             </div>`}`
         }
       </div>
       <button class="btn btn-primary big-log-btn" id="begin-route-btn">BEGIN ROUTE</button>
@@ -991,34 +1057,80 @@
       vInput.oninput = () => { if(vInput.value.trim()) vInput.classList.remove("pt-error-field"); };
     }
 
+    const showGridBtn = document.getElementById("show-route-grid-btn");
+    if(showGridBtn){ showGridBtn.onclick = () => { state.routeGridExpanded = true; renderPretripPage(); }; }
+
     const grid = document.getElementById("route-grid");
-    grid.innerHTML = routeGridHtml(state.selectedRouteChoice);
-    const nextRunBox = document.getElementById("pretrip-next-run");
-    function showNextRun(key){
-      if(!key){ nextRunBox.style.display = "none"; return; }
-      nextRunBox.style.display = "block";
-      nextRunBox.textContent = `Next Scheduled Run for ${routeShort(key)}: ${nextScheduledRun(key)}`;
+    if(grid){
+      grid.innerHTML = routeGridHtml(state.selectedRouteChoice);
+      const nextRunBox = document.getElementById("pretrip-next-run");
+      function showNextRun(key){
+        if(!key){ nextRunBox.style.display = "none"; return; }
+        nextRunBox.style.display = "block";
+        nextRunBox.textContent = `Next Scheduled Run for ${routeShort(key)}: ${nextScheduledRun(key)}`;
+      }
+      showNextRun(state.selectedRouteChoice);
+      wireRouteGrid(grid, (key) => {
+        state.selectedRouteChoice = key;
+        state.pretripAnswers = {}; // question sets differ between EV and standard routes
+        state.quickStartChecks = {}; state.pretripDamage = null;
+        renderPretripPage();
+      });
     }
-    showNextRun(state.selectedRouteChoice);
-    wireRouteGrid(grid, (key) => {
-      state.selectedRouteChoice = key;
-      state.pretripAnswers = {}; // question sets differ between EV and standard routes
-      renderPretripPage();
-    });
 
     if(!already){
       const itemsBox = document.getElementById("pretrip-items");
-      itemsBox.innerHTML = items.map((item,i)=>`
-        <div class="pt-item">
-          <div class="pt-item-label">${item}</div>
-          <div class="pt-btns" data-idx="${i}">
-            <button class="pt-btn" data-val="good">Good</button>
-            <button class="pt-btn" data-val="bad">Bad</button>
-            <button class="pt-btn" data-val="na">N/A</button>
+      if(isEV){
+        let idx = 0;
+        itemsBox.innerHTML = EV_PRETRIP_SECTIONS.map(section=>{
+          const rows = section.items.map(item=>{
+            const i = idx++;
+            return `
+              <div class="pt-item">
+                <div class="pt-item-label">${item}</div>
+                <div class="pt-btns" data-idx="${i}">
+                  <button class="pt-btn" data-val="good">Good</button>
+                  <button class="pt-btn" data-val="bad">Bad</button>
+                  <button class="pt-btn" data-val="na">N/A</button>
+                </div>
+                <input type="text" class="pt-explain" id="ptx-explain-${i}" placeholder="Describe the issue" style="display:none;">
+              </div>`;
+          }).join("");
+          return `<div class="section-label" style="font-size:10.5px;font-weight:800;color:var(--maroon-dark);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px;padding-bottom:5px;border-bottom:2px solid var(--gold);">${section.label}</div>
+            ${section.note?`<div style="font-size:11px;color:var(--muted);margin:-2px 0 6px;">${section.note}</div>`:``}
+            ${rows}`;
+        }).join("");
+
+        const qsBox = document.getElementById("quick-start-list");
+        qsBox.innerHTML = EV_QUICK_START_STEPS.map((step,i)=>`
+          <div class="check-row" data-qidx="${i}" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer;">
+            <div class="qs-box" style="width:22px;height:22px;border:2.5px solid var(--maroon);border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:900;color:white;font-size:14px;"></div>
+            <div style="font-size:13.5px;font-weight:600;">${step}</div>
+          </div>`).join("");
+        qsBox.querySelectorAll(".check-row").forEach(row=>{
+          const i = row.dataset.qidx;
+          row.onclick = () => {
+            state.quickStartChecks[i] = !state.quickStartChecks[i];
+            const box = row.querySelector(".qs-box");
+            box.style.background = state.quickStartChecks[i] ? "var(--success)" : "";
+            box.style.borderColor = state.quickStartChecks[i] ? "var(--success)" : "var(--maroon)";
+            box.textContent = state.quickStartChecks[i] ? "✓" : "";
+            row.classList.remove("pt-error");
+          };
+        });
+      } else {
+        itemsBox.innerHTML = items.map((item,i)=>`
+          <div class="pt-item">
+            <div class="pt-item-label">${item}</div>
+            <div class="pt-btns" data-idx="${i}">
+              <button class="pt-btn" data-val="good">Good</button>
+              <button class="pt-btn" data-val="bad">Bad</button>
+              <button class="pt-btn" data-val="na">N/A</button>
+            </div>
+            <input type="text" class="pt-explain" id="ptx-explain-${i}" placeholder="Describe the issue" style="display:none;">
           </div>
-          <input type="text" class="pt-explain" id="ptx-explain-${i}" placeholder="Describe the issue" style="display:none;">
-        </div>
-      `).join("");
+        `).join("");
+      }
       itemsBox.querySelectorAll(".pt-btns").forEach(group=>{
         const idx = group.dataset.idx;
         group.querySelectorAll(".pt-btn").forEach(btn=>{
@@ -1036,6 +1148,21 @@
       });
       document.getElementById("pt-mileage").oninput = (e) => { if(e.target.value.trim()) e.target.classList.remove("pt-error-field"); };
       wireFuelChips("pt-fuel-chips", f => { state.pretripFuel = f; });
+
+      if(isEV){
+        const dynBox = document.getElementById("damage-yn");
+        dynBox.querySelectorAll(".pt-btn").forEach(btn=>{
+          btn.onclick = () => {
+            dynBox.querySelectorAll(".pt-btn").forEach(b=>b.classList.remove("sel-good","sel-bad"));
+            btn.classList.add(btn.dataset.val==='yes' ? 'sel-bad' : 'sel-good');
+            state.pretripDamage = btn.dataset.val;
+            document.getElementById("damage-explain-wrap").style.display = btn.dataset.val==='yes' ? 'block' : 'none';
+            dynBox.closest(".pt-item").classList.remove("pt-error");
+          };
+        });
+        const damageExplainInp = document.getElementById("damage-explain");
+        if(damageExplainInp) damageExplainInp.oninput = () => { if(damageExplainInp.value.trim()) dynBox.closest(".pt-item").classList.remove("pt-error"); };
+      }
       document.getElementById("pt-photo").onchange = (e) => {
         const file = e.target.files[0]; if(!file) return;
         const reader = new FileReader();
@@ -1048,10 +1175,10 @@
     }
 
     document.getElementById("change-driver-btn").onclick = () => logoutDriver();
-    document.getElementById("begin-route-btn").onclick = async () => { await beginRoute(already, items); };
+    document.getElementById("begin-route-btn").onclick = async () => { await beginRoute(already, items, isEV); };
   }
 
-  async function beginRoute(already, items){
+  async function beginRoute(already, items, isEV){
     items = items || PRETRIP_ITEMS;
     document.getElementById("route-grid").style.outline = "";
     document.getElementById("d-vehicle").classList.remove("pt-error-field");
@@ -1070,6 +1197,7 @@
       firstError = firstError || vf;
     }
 
+    let quickStartOk = true, damageOk = true;
     if(!already){
       const mileageInput = document.getElementById("pt-mileage");
       const mileage = mileageInput.value.trim();
@@ -1077,6 +1205,22 @@
 
       const fuelBox = document.getElementById("pt-fuel-chips");
       if(!state.pretripFuel){ fuelBox.classList.add("pt-error-field"); firstError = firstError || fuelBox; }
+
+      if(isEV){
+        quickStartOk = EV_QUICK_START_STEPS.every((_,i)=>!!state.quickStartChecks[i]);
+        if(!quickStartOk){
+          const qsBox = document.getElementById("quick-start-list");
+          qsBox.querySelectorAll(".check-row").forEach(row=>{ if(!state.quickStartChecks[row.dataset.qidx]) row.classList.add("pt-error"); });
+          firstError = firstError || qsBox;
+        }
+        const damageExplainInp = document.getElementById("damage-explain");
+        damageOk = !!state.pretripDamage && (state.pretripDamage!=='yes' || (damageExplainInp && damageExplainInp.value.trim()));
+        if(!damageOk){
+          const dynBox = document.getElementById("damage-yn").closest(".pt-item");
+          dynBox.classList.add("pt-error");
+          firstError = firstError || dynBox;
+        }
+      }
 
       items.forEach((_,i)=>{
         const itemEl = document.getElementById("ptx-explain-"+i).closest(".pt-item");
@@ -1086,7 +1230,8 @@
         else { itemEl.classList.remove("pt-error"); }
       });
 
-      if(!mileage || !state.pretripFuel || items.some((_,i)=> !state.pretripAnswers[i] || (state.pretripAnswers[i]==='bad' && !document.getElementById("ptx-explain-"+i).value.trim()))){
+      const itemsOk = !items.some((_,i)=> !state.pretripAnswers[i] || (state.pretripAnswers[i]==='bad' && !document.getElementById("ptx-explain-"+i).value.trim()));
+      if(!mileage || !state.pretripFuel || !itemsOk || !quickStartOk || !damageOk){
         if(firstError) firstError.scrollIntoView({behavior:"smooth", block:"center"});
         return;
       }
@@ -1099,7 +1244,12 @@
     if(!already){
       const mileage = document.getElementById("pt-mileage").value.trim();
       const checklist = items.map((item,i)=>({item, status:state.pretripAnswers[i], note: state.pretripAnswers[i]==='bad' ? document.getElementById("ptx-explain-"+i).value.trim() : ""}));
-      currentShift().pretrip = {done:true, route:state.selectedRouteChoice, vehicle, capacity, startingMileage:mileage, startingFuel:state.pretripFuel, checklist, photo: state.pretripPhoto||null, completedAt:new Date().toISOString()};
+      const pretripRecord = {done:true, route:state.selectedRouteChoice, vehicle, capacity, startingMileage:mileage, startingFuel:state.pretripFuel, checklist, photo: state.pretripPhoto||null, completedAt:new Date().toISOString()};
+      if(isEV){
+        pretripRecord.quickStart = EV_QUICK_START_STEPS.map((step,i)=>({step, done: !!state.quickStartChecks[i]}));
+        pretripRecord.damage = {reported: state.pretripDamage==='yes', explain: state.pretripDamage==='yes' ? (document.getElementById("damage-explain").value||"").trim() : ""};
+      }
+      currentShift().pretrip = pretripRecord;
       await saveShiftRecord(state.driverLock.name, state.shiftRecord);
     }
     state.shiftRoute = state.selectedRouteChoice; state.shiftVehicle = vehicle; state.shiftCapacity = capacity;
@@ -1110,12 +1260,15 @@
 
   async function startTripInternal(){
     const tripsToday = [...state.myCompletedTrips, ...(state.myTrip?[state.myTrip]:[])];
+    const asg = state.msAssignment;
+    const routeChanged = asg && asg.routeKey && asg.routeKey !== state.shiftRoute;
     const trip = {
       id:"trip-"+Date.now(), route: state.shiftRoute, driver: state.driverLock.name,
       vehicle: state.shiftVehicle, vehicleCapacity: state.shiftCapacity,
       date: todayKey(), tripNum: tripsToday.length+1, scheduledRun: nearestRouteSlot(state.shiftRoute),
       departAAMU: null, departMeta: null,
-      stops:[], arriveAAMU:null, arriveMeta:null, complete:false
+      stops:[], arriveAAMU:null, arriveMeta:null, complete:false,
+      routeChangeAlert: routeChanged ? {from: asg.routeKey, to: state.shiftRoute, acknowledged:false} : null
     };
     state.myTrip = trip;
     await syncTrip(trip);
@@ -1864,10 +2017,11 @@
   ];
   function computeRouteSummary(routeKey, trips){
     const routeTrips = trips.filter(t=>t.route===routeKey);
-    let going=0, coming=0, hasOverflow=false;
+    let going=0, coming=0, hasOverflow=false, routeChange=null;
     const events = [];
     let latestDriver = null, latestTs = null;
     routeTrips.forEach(t=>{
+      if(t.routeChangeAlert && !t.routeChangeAlert.acknowledged) routeChange = {...t.routeChangeAlert, driver:t.driver, tripId:t.id};
       if(t.departAAMU && t.departMeta){
         going += t.departGoing||0; coming += t.departComing||0;
         if(t.departOverflow && !t.departAcknowledged) hasOverflow = true;
@@ -1884,7 +2038,7 @@
       });
     });
     events.sort((a,b)=> new Date(b.ts) - new Date(a.ts));
-    return {driver: latestDriver, total: going+coming, hasOverflow, events};
+    return {driver: latestDriver, total: going+coming, hasOverflow, routeChange, events};
   }
   function routeBoxHtml(routeKey, trips){
     const s = computeRouteSummary(routeKey, trips);
@@ -1892,8 +2046,9 @@
     const shown = expanded ? s.events : s.events.slice(0,2);
     return `
       <div class="route-box${s.hasOverflow?' route-box-overflow':''}">
-        ${s.hasOverflow ? '<div class="route-box-badge">Overflow</div>' : ''}
+        ${s.hasOverflow ? '<div class="route-box-badge">Overflow</div>' : (s.routeChange ? `<div class="route-box-badge" style="background:var(--warn-orange);">Route Change</div>` : '')}
         <div class="route-box-title">${ROUTE_BOX_LABEL[routeKey]} <span class="route-box-driver">- Driver: ${s.driver || 'none logged in'}</span></div>
+        ${s.routeChange ? `<div style="font-size:11px;color:var(--warn-orange);font-weight:700;">Was assigned ${routeShort(s.routeChange.from)}</div>` : ``}
         <div class="route-box-total${s.hasOverflow?' route-box-total-alert':''}">${s.total} rider${s.total===1?'':'s'} today</div>
         <div class="route-box-feed">
           ${shown.length===0 ? '<div class="route-box-empty">No activity yet</div>' :
@@ -2166,7 +2321,11 @@
     const coming = trips.reduce((s,t)=>s+(t.departComing||0)+t.stops.reduce((a,x)=>a+(x.coming||0),0),0);
     const leftBehind = trips.reduce((s,t)=>s+(t.departLeftBehind||0)+t.stops.reduce((a,x)=>a+(x.leftBehind||0),0),0);
     const openAlerts = [];
+    const routeChanges = [];
     trips.forEach(t=>{
+      if(t.routeChangeAlert && !t.routeChangeAlert.acknowledged){
+        routeChanges.push({tripId:t.id, driver:t.driver, from:routeShort(t.routeChangeAlert.from), to:routeShort(t.routeChangeAlert.to)});
+      }
       if(t.departOverflow && !t.departAcknowledged){
         openAlerts.push({tripId:t.id, stopIdx:-1, route:routeShort(t.route), driver:t.driver, stop:"AAMU (Depart)",
                           going:t.departGoing, coming:t.departComing, leftBehind:t.departLeftBehind, cap:t.vehicleCapacity||DEFAULT_CAPACITY, time:t.departAAMU});
@@ -2289,6 +2448,17 @@
               </div>
             </div>
             <div class="card">
+              <div class="card-label">Route Changes Today</div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">A driver picked a different route than the Master Schedule assigned them.</div>
+              ${routeChanges.length===0 ? '<div class="empty-note">No route changes today.</div>' :
+                routeChanges.map(r=>`
+                  <div class="alert-item">
+                    <div><div class="a-txt">${r.driver}: assigned <strong>${r.from}</strong>, driving <strong>${r.to}</strong></div></div>
+                    <button class="btn btn-outline btn-small" data-routechange-trip="${r.tripId}">Acknowledge</button>
+                  </div>
+                `).join("")}
+            </div>
+            <div class="card">
               <div class="card-label">Vehicle Inspection Issues</div>
               ${issues.length===0 ? '<div class="empty-note">No issues reported today.</div>' : issues.map(i=>`<div class="issue-item">${i.phase} — ${i.driver}: ${i.item}${i.note?` — "${i.note}"`:''}</div>`).join("")}
             </div>
@@ -2363,6 +2533,17 @@
           if(idx===-1) trip.departAcknowledged = true; else trip.stops[idx].acknowledged = true;
           await saveDay(day);
         }
+        await refreshDispatch();
+      };
+    });
+
+    dispatchView.querySelectorAll("[data-routechange-trip]").forEach(btn=>{
+      btn.onclick = async () => {
+        const res = await loadDayForWrite();
+        if(!res.ok) return;
+        const day = res.data;
+        const trip = day.trips.find(t=>t.id===btn.dataset.routechangeTrip);
+        if(trip && trip.routeChangeAlert){ trip.routeChangeAlert.acknowledged = true; await saveDay(day); }
         await refreshDispatch();
       };
     });
