@@ -1191,7 +1191,7 @@ function renderLunch(){
   const lunchRoutes = DATA.routes.filter(r=>r.lunch && Object.keys(r.lunch).length);
   const gridCard = document.createElement('div'); gridCard.className='card';
   gridCard.innerHTML = `<h2 class="display">Lunch schedule</h2>
-    <p class="note">Every route running more than 8 hours gets a 1-hour lunch break. This consolidates what's set per-day in the Schedule tab into one editable view. Leave the relief driver blank to mark it unassigned — it'll show in red here and on that driver's app.</p>
+    <p class="note">Every route running more than 8 hours gets a 1-hour lunch break. This consolidates what's set per-day in the Schedule tab into one editable view. Leave the relief driver blank to mark it unassigned — it'll show in red here and on that driver's app. Use "Set whole week" on the right to fill every day at once instead of one cell at a time.</p>
     <table class="grid" id="lunchGrid"></table>`;
   el.appendChild(gridCard);
   const table = document.getElementById('lunchGrid');
@@ -1200,7 +1200,7 @@ function renderLunch(){
     return;
   }
   const lunchDays = ["Mon","Tue","Wed","Thu","Fri"];
-  let html = '<tr><th>Route</th>' + lunchDays.map(d=>`<th>${d}<br><span style="font-weight:400;">${fmtDate(WEEK[d])}</span></th>`).join('') + '</tr>';
+  let html = '<tr><th>Route</th>' + lunchDays.map(d=>`<th>${d}<br><span style="font-weight:400;">${fmtDate(WEEK[d])}</span></th>`).join('') + '<th>Set whole week</th></tr>';
   lunchRoutes.forEach((r)=>{
     const ri = DATA.routes.indexOf(r);
     html += `<tr><td><b>${r.name}</b><br><span class="note">${r.vehicle}</span></td>`;
@@ -1213,10 +1213,27 @@ function renderLunch(){
         <select data-ri="${ri}" data-day="${d}" data-field="driver" style="${!driver?'border-color:var(--danger);color:var(--danger);':''}">${driverOptionsHTML(driver)}</select>
       </td>`;
     });
+    html += `<td style="white-space:nowrap;">
+      <input type="time" id="bulkLunchTime-${ri}" value="12:00" style="margin-bottom:4px;width:auto;display:inline-block;">
+      <select id="bulkLunchDriver-${ri}" style="width:auto;display:inline-block;">${driverOptionsHTML('')}</select>
+      <button class="addbtn" data-bulk-lunch="${ri}" style="padding:6px 10px;font-size:11px;">Apply</button>
+    </td>`;
     html += '</tr>';
   });
   table.innerHTML = html;
+  table.querySelectorAll('[data-bulk-lunch]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const ri = parseInt(btn.dataset.bulkLunch);
+      const r = DATA.routes[ri];
+      const time = document.getElementById('bulkLunchTime-'+ri).value || "12:00";
+      const driver = document.getElementById('bulkLunchDriver-'+ri).value.trim();
+      Object.keys(r.lunch).forEach(d=>{ r.lunch[d] = {time, driver}; });
+      saveData();
+      renderLunch();
+    };
+  });
   table.querySelectorAll('input, select').forEach(inp=>{
+    if(inp.id && (inp.id.startsWith('bulkLunchTime-') || inp.id.startsWith('bulkLunchDriver-'))) return;
     inp.onchange = ()=>{
       const ri = parseInt(inp.dataset.ri), d = inp.dataset.day, field = inp.dataset.field;
       const route = DATA.routes[ri];
@@ -1234,11 +1251,11 @@ function renderWeek(){
   el.appendChild(renderScheduleSubNav('week'));
   const gridCard = document.createElement('div'); gridCard.className='card';
   gridCard.innerHTML = `<h2 class="display">Week schedule</h2>
-    <p class="note">Changes here update the Dashboard and Schedule tabs immediately. Choose "— Unassigned —" to mark a shift open. Cells for days a route doesn't normally run are shown as "—".</p>
+    <p class="note">Changes here update the Dashboard and Schedule tabs immediately. Choose "— Unassigned —" to mark a shift open. Cells for days a route doesn't normally run are shown as "—". Use "Set whole week" on the right to fill every day at once instead of one cell at a time.</p>
     <table class="grid" id="weekGrid"></table>`;
   el.appendChild(gridCard);
   const table = document.getElementById('weekGrid');
-  let html = '<tr><th>Route</th>' + DAYS.map(d=>`<th>${d}<br><span style="font-weight:400;">${fmtDate(WEEK[d])}</span></th>`).join('') + '</tr>';
+  let html = '<tr><th>Route</th>' + DAYS.map(d=>`<th>${d}<br><span style="font-weight:400;">${fmtDate(WEEK[d])}</span></th>`).join('') + '<th>Set whole week</th></tr>';
   DATA.routes.forEach((r,ri)=>{
     html += `<tr><td><b>${r.name}</b><br><span class="note">${r.vehicle}</span></td>`;
     DAYS.forEach(d=>{
@@ -1253,15 +1270,35 @@ function renderWeek(){
         html += `<td><select data-ri="${ri}" data-day="${d}">${driverOptionsHTML(val)}</select></td>`;
       }
     });
+    html += `<td style="white-space:nowrap;">
+      <select id="bulkWeek-${ri}" style="width:auto;display:inline-block;">${driverOptionsHTML('')}</select>
+      <button class="addbtn" data-bulk-week="${ri}" style="padding:6px 10px;font-size:11px;">Apply</button>
+    </td>`;
     html += '</tr>';
   });
   html += `<tr><td><b>Trips</b><br><span class="note">from Trip Requests tab</span></td>` + DAYS.map(d=>{
     const trips = DATA.trips.filter(t=>t.date===WEEK[d]);
     if(trips.length===0) return `<td class="muted">—</td>`;
     return `<td>${trips.map(t=>`<span style="color:${statusColor(t.status)};font-weight:700;">●</span> ${t.pickup}→${t.destination}<br><span class="note">${label(t.departure)}–${label(t.return)} · ${t.status}</span>`).join('<hr style="border:none;border-top:1px solid var(--line);margin:4px 0;">')}</td>`;
-  }).join('') + `</tr>`;
+  }).join('') + `<td></td></tr>`;
   table.innerHTML = html;
+  table.querySelectorAll('[data-bulk-week]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const ri = parseInt(btn.dataset.bulkWeek);
+      const r = DATA.routes[ri];
+      const sel = document.getElementById('bulkWeek-'+ri);
+      const val = sel.value.trim();
+      const finalVal = val===""?"UNASSIGNED":val;
+      Object.keys(r.days).forEach(d=>{ r.days[d] = finalVal; });
+      if(r.shifts2){
+        Object.keys(r.shifts2).forEach(d=>{ r.shifts2[d].forEach(s=>{ s.driver = finalVal; }); });
+      }
+      saveData();
+      renderWeek();
+    };
+  });
   table.querySelectorAll('select').forEach(inp=>{
+    if(inp.id && inp.id.startsWith('bulkWeek-')) return;
     inp.onchange = ()=>{
       const ri = parseInt(inp.dataset.ri), d = inp.dataset.day;
       const val = inp.value.trim();
