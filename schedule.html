@@ -77,7 +77,9 @@
   .editor button{padding:6px 12px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:#fff;}
   .editor button.save{background:var(--maroon);color:#fff;border-color:var(--maroon);}
   .overlay{position:fixed;inset:0;z-index:49;background:transparent;}
-  table.grid{width:100%;border-collapse:collapse;font-size:12px;}
+  table.grid{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
+  table.grid th:first-child, table.grid td:first-child{width:15%;}
+  table.grid th:last-child, table.grid td:last-child{width:15%;}
   table.grid th{background:#F3EEE6;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#8a7d76;padding:7px 6px;text-align:left;border:1px solid var(--line);}
   table.grid td{padding:4px 6px;border:1px solid var(--line);}
   table.grid input, table.grid select{width:100%;padding:5px 6px;border:1px solid var(--line);border-radius:4px;font-size:12px;}
@@ -1213,10 +1215,10 @@ function renderLunch(){
         <select data-ri="${ri}" data-day="${d}" data-field="driver" style="${!driver?'border-color:var(--danger);color:var(--danger);':''}">${driverOptionsHTML(driver)}</select>
       </td>`;
     });
-    html += `<td style="white-space:nowrap;">
-      <input type="time" id="bulkLunchTime-${ri}" value="12:00" style="margin-bottom:4px;width:auto;display:inline-block;">
-      <select id="bulkLunchDriver-${ri}" style="width:auto;display:inline-block;">${driverOptionsHTML('')}</select>
-      <button class="addbtn" data-bulk-lunch="${ri}" style="padding:6px 10px;font-size:11px;">Apply</button>
+    html += `<td>
+      <input type="time" id="bulkLunchTime-${ri}" value="12:00" style="margin-bottom:4px;">
+      <select id="bulkLunchDriver-${ri}" style="margin-bottom:4px;">${driverOptionsHTML('')}</select>
+      <button class="addbtn" data-bulk-lunch="${ri}" style="width:100%;padding:5px 0;font-size:10.5px;">Apply</button>
     </td>`;
     html += '</tr>';
   });
@@ -1270,9 +1272,9 @@ function renderWeek(){
         html += `<td><select data-ri="${ri}" data-day="${d}">${driverOptionsHTML(val)}</select></td>`;
       }
     });
-    html += `<td style="white-space:nowrap;">
-      <select id="bulkWeek-${ri}" style="width:auto;display:inline-block;">${driverOptionsHTML('')}</select>
-      <button class="addbtn" data-bulk-week="${ri}" style="padding:6px 10px;font-size:11px;">Apply</button>
+    html += `<td>
+      <select id="bulkWeek-${ri}" style="margin-bottom:4px;">${driverOptionsHTML('')}</select>
+      <button class="addbtn" data-bulk-week="${ri}" style="width:100%;padding:5px 0;font-size:10.5px;">Apply</button>
     </td>`;
     html += '</tr>';
   });
