@@ -751,6 +751,7 @@
     myTrip:null, myCompletedTrips:[], shiftRoute:null, shiftVehicle:null, shiftCapacity:null,
     selectedRouteChoice:null, pretripAnswers:{}, pretripPhoto:null, pretripFuel:null, posttripFuel:null, postTripAnswers:{}, shiftRecord:null,
     quickStartChecks:{}, pretripDamage:null, routeGridExpanded:false, myWeekExpanded:false, msWeekSchedule:null,
+    pretripMileage:'', pretripExplains:{}, damageExplainText:'',
     stopPhase:'arriving', pendingStop:null, divertedName:'',
     pendingIds:new Set(), changingRoute:false,
     dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(), lastSignIns:[], lastSignInSearch:null, lastConsolidatedSearch:null,
@@ -994,6 +995,7 @@
       state.selectedRouteChoice = cs0.pretrip.route;
     }
     state.pretripAnswers = {}; state.pretripPhoto = null; state.pretripFuel = null; state.posttripFuel = null; state.postTripAnswers = {};
+    state.pretripMileage = ''; state.pretripExplains = {}; state.damageExplainText = '';
     state.quickStartChecks = {}; state.pretripDamage = null; state.routeGridExpanded = false; state.myWeekExpanded = false;
     const msData = await fetchMasterScheduleData();
     state.msAssignment = msFindAssignment(msData, name);
@@ -1093,7 +1095,7 @@
              <div class="info-row"><span>${isEV?'Beginning Odometer':'Starting Mileage'}</span><strong>${currentShift().pretrip.startingMileage||'—'}</strong></div>
              <div class="info-row"><span>${isEV?'Beginning Charge':'Starting Fuel'}</span><strong>${currentShift().pretrip.startingFuel||'—'}</strong></div>`
           : `<div class="field-row">
-               <div class="field"><label>${isEV?'Beginning Odometer':'Starting Mileage'}</label><input id="pt-mileage" type="number" min="0" placeholder="Odometer reading"></div>
+               <div class="field"><label>${isEV?'Beginning Odometer':'Starting Mileage'}</label><input id="pt-mileage" type="number" min="0" placeholder="Odometer reading" value="${state.pretripMileage||''}"></div>
              </div>
              <div class="pt-item">
                <div class="pt-item-label">${isEV?'Beginning Charge':'Starting Fuel Level'}</div>
@@ -1109,20 +1111,20 @@
              <div class="pt-item">
                <div class="pt-item-label">Any new or noticeable damage?</div>
                <div class="pt-btns" id="damage-yn">
-                 <button class="pt-btn" data-val="no">No</button>
-                 <button class="pt-btn" data-val="yes">Yes</button>
+                 <button class="pt-btn${state.pretripDamage==='no'?' sel-good':''}" data-val="no">No</button>
+                 <button class="pt-btn${state.pretripDamage==='yes'?' sel-bad':''}" data-val="yes">Yes</button>
                </div>
-               <div id="damage-explain-wrap" style="display:none;margin-top:8px;">
-                 <input type="text" class="pt-explain" id="damage-explain" placeholder="Explain the damage" style="display:block;">
+               <div id="damage-explain-wrap" style="display:${state.pretripDamage==='yes'?'block':'none'};margin-top:8px;">
+                 <input type="text" class="pt-explain" id="damage-explain" placeholder="Explain the damage" value="${(state.damageExplainText||'').replace(/"/g,'&quot;')}" style="display:block;">
                  <label style="font-size:11.5px;color:var(--muted);display:block;margin:8px 0 4px;">Attach a photo</label>
                  <input type="file" accept="image/*" capture="environment" id="pt-photo">
-                 <div id="pt-photo-preview"></div>
+                 <div id="pt-photo-preview">${state.pretripPhoto ? `<img src="${state.pretripPhoto}" style="max-width:140px;border-radius:8px;margin-top:6px;">` : ``}</div>
                </div>
              </div>` : `
              <div class="pt-item">
                <div class="pt-item-label">Photo of any damage (optional)</div>
                <input type="file" accept="image/*" capture="environment" id="pt-photo">
-               <div id="pt-photo-preview"></div>
+               <div id="pt-photo-preview">${state.pretripPhoto ? `<img src="${state.pretripPhoto}" style="max-width:140px;border-radius:8px;margin-top:6px;">` : ``}</div>
              </div>`}`
         }
       </div>
@@ -1157,39 +1159,45 @@
         state.selectedRouteChoice = key;
         state.pretripAnswers = {}; // question sets differ between EV and standard routes
         state.quickStartChecks = {}; state.pretripDamage = null;
+        state.pretripExplains = {}; state.damageExplainText = ''; state.pretripPhoto = null;
         renderPretripPage();
       });
     }
 
     if(!already){
       const itemsBox = document.getElementById("pretrip-items");
+      function ptItemHtml(item, i){
+        const ans = state.pretripAnswers[i];
+        const explainVal = state.pretripExplains[i] || "";
+        return `
+          <div class="pt-item">
+            <div class="pt-item-label">${item}</div>
+            <div class="pt-btns" data-idx="${i}">
+              <button class="pt-btn${ans==='good'?' sel-good':''}" data-val="good">Good</button>
+              <button class="pt-btn${ans==='bad'?' sel-bad':''}" data-val="bad">Bad</button>
+              <button class="pt-btn${ans==='na'?' sel-na':''}" data-val="na">N/A</button>
+            </div>
+            <input type="text" class="pt-explain" id="ptx-explain-${i}" placeholder="Describe the issue" value="${explainVal.replace(/"/g,'&quot;')}" style="display:${ans==='bad'?'block':'none'};">
+          </div>`;
+      }
       if(isEV){
         let idx = 0;
         itemsBox.innerHTML = EV_PRETRIP_SECTIONS.map(section=>{
-          const rows = section.items.map(item=>{
-            const i = idx++;
-            return `
-              <div class="pt-item">
-                <div class="pt-item-label">${item}</div>
-                <div class="pt-btns" data-idx="${i}">
-                  <button class="pt-btn" data-val="good">Good</button>
-                  <button class="pt-btn" data-val="bad">Bad</button>
-                  <button class="pt-btn" data-val="na">N/A</button>
-                </div>
-                <input type="text" class="pt-explain" id="ptx-explain-${i}" placeholder="Describe the issue" style="display:none;">
-              </div>`;
-          }).join("");
+          const rows = section.items.map(item=>ptItemHtml(item, idx++)).join("");
           return `<div class="section-label" style="font-size:10.5px;font-weight:800;color:var(--maroon-dark);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px;padding-bottom:5px;border-bottom:2px solid var(--gold);">${section.label}</div>
             ${section.note?`<div style="font-size:11px;color:var(--muted);margin:-2px 0 6px;">${section.note}</div>`:``}
             ${rows}`;
         }).join("");
 
         const qsBox = document.getElementById("quick-start-list");
-        qsBox.innerHTML = EV_QUICK_START_STEPS.map((step,i)=>`
+        qsBox.innerHTML = EV_QUICK_START_STEPS.map((step,i)=>{
+          const checked = !!state.quickStartChecks[i];
+          return `
           <div class="check-row" data-qidx="${i}" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer;">
-            <div class="qs-box" style="width:22px;height:22px;border:2.5px solid var(--maroon);border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:900;color:white;font-size:14px;"></div>
+            <div class="qs-box" style="width:22px;height:22px;border:2.5px solid ${checked?'var(--success)':'var(--maroon)'};border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:900;color:white;font-size:14px;background:${checked?'var(--success)':''};">${checked?'✓':''}</div>
             <div style="font-size:13.5px;font-weight:600;">${step}</div>
-          </div>`).join("");
+          </div>`;
+        }).join("");
         qsBox.querySelectorAll(".check-row").forEach(row=>{
           const i = row.dataset.qidx;
           row.onclick = () => {
@@ -1202,17 +1210,7 @@
           };
         });
       } else {
-        itemsBox.innerHTML = items.map((item,i)=>`
-          <div class="pt-item">
-            <div class="pt-item-label">${item}</div>
-            <div class="pt-btns" data-idx="${i}">
-              <button class="pt-btn" data-val="good">Good</button>
-              <button class="pt-btn" data-val="bad">Bad</button>
-              <button class="pt-btn" data-val="na">N/A</button>
-            </div>
-            <input type="text" class="pt-explain" id="ptx-explain-${i}" placeholder="Describe the issue" style="display:none;">
-          </div>
-        `).join("");
+        itemsBox.innerHTML = items.map((item,i)=>ptItemHtml(item, i)).join("");
       }
       itemsBox.querySelectorAll(".pt-btns").forEach(group=>{
         const idx = group.dataset.idx;
@@ -1227,9 +1225,10 @@
         });
       });
       itemsBox.querySelectorAll(".pt-explain").forEach(inp=>{
-        inp.oninput = () => { if(inp.value.trim()) inp.closest(".pt-item").classList.remove("pt-error"); };
+        const idx = inp.id.replace("ptx-explain-","");
+        inp.oninput = () => { state.pretripExplains[idx] = inp.value; if(inp.value.trim()) inp.closest(".pt-item").classList.remove("pt-error"); };
       });
-      document.getElementById("pt-mileage").oninput = (e) => { if(e.target.value.trim()) e.target.classList.remove("pt-error-field"); };
+      document.getElementById("pt-mileage").oninput = (e) => { state.pretripMileage = e.target.value; if(e.target.value.trim()) e.target.classList.remove("pt-error-field"); };
       wireFuelChips("pt-fuel-chips", f => { state.pretripFuel = f; });
 
       if(isEV){
@@ -1244,7 +1243,7 @@
           };
         });
         const damageExplainInp = document.getElementById("damage-explain");
-        if(damageExplainInp) damageExplainInp.oninput = () => { if(damageExplainInp.value.trim()) dynBox.closest(".pt-item").classList.remove("pt-error"); };
+        if(damageExplainInp) damageExplainInp.oninput = () => { state.damageExplainText = damageExplainInp.value; if(damageExplainInp.value.trim()) dynBox.closest(".pt-item").classList.remove("pt-error"); };
       }
       document.getElementById("pt-photo").onchange = (e) => {
         const file = e.target.files[0]; if(!file) return;
@@ -1911,6 +1910,7 @@
     await saveShiftRecord(state.driverLock.name, state.shiftRecord);
     state.shiftRoute = null; state.shiftVehicle = null; state.shiftCapacity = null; state.selectedRouteChoice = null;
     state.pretripAnswers = {}; state.pretripPhoto = null; state.pretripFuel = null; state.posttripFuel = null; state.postTripAnswers = {};
+    state.pretripMileage = ''; state.pretripExplains = {}; state.damageExplainText = '';
     state.myTrip = null;
     await renderDriverHome();
   }
