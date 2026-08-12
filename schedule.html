@@ -604,6 +604,7 @@ function getConcerns(){
   const list = [];
   DATA.routes.forEach(r=>{
     Object.keys(r.days).forEach(day=>{
+      if(DATA.holidays[WEEK[day]]) return; // this date runs the holiday schedule instead — no coverage needed here
       if(r.days[day] === "UNASSIGNED"){
         list.push({type:"Unassigned shift", day, detail:`${r.name} (${r.vehicle}) has no driver on ${day}.`,
           action:()=>{ currentDay=day; showView('schedule'); flashRoute(r.name, day); }});
@@ -611,6 +612,7 @@ function getConcerns(){
     });
     if(r.shifts2){
       Object.keys(r.shifts2).forEach(day=>{
+        if(DATA.holidays[WEEK[day]]) return;
         r.shifts2[day].forEach((s,si)=>{
           if(s.driver === "UNASSIGNED"){
             list.push({type:"Unassigned shift", day, detail:`${r.name} (${label(s.start)}–${label(s.end)}) has no driver on ${day}.`,
@@ -619,6 +621,19 @@ function getConcerns(){
         });
       });
     }
+  });
+  // Holiday/no-school dates still need East WKND / West WKND actually covered
+  Object.keys(DATA.holidays).forEach(dateISO=>{
+    const dayLabel = Object.keys(WEEK).find(d=>WEEK[d]===dateISO);
+    if(!dayLabel) return; // outside the currently displayed week — not this week's concern
+    const h = DATA.holidays[dateISO];
+    ["East WKND","West WKND"].forEach(routeName=>{
+      const val = h.assignments ? h.assignments[routeName] : null;
+      if(!val || val==="UNASSIGNED"){
+        list.push({type:"Unassigned shift", day:dayLabel, detail:`${routeName} has no driver on ${dayLabel} (${h.type}).`,
+          action:()=>{ currentDay=dayLabel; showView('schedule'); }});
+      }
+    });
   });
   DATA.relief.forEach(rel=>{
     Object.keys(rel.days).forEach(day=>{
@@ -1225,12 +1240,17 @@ function renderLunch(){
     return;
   }
   const lunchDays = ["Mon","Tue","Wed","Thu","Fri"];
-  let html = '<tr><th>Route</th>' + lunchDays.map(d=>`<th>${d}<br><span style="font-weight:400;">${fmtDate(WEEK[d])}</span></th>`).join('') + '<th>Set whole week</th></tr>';
+  let html = '<tr><th>Route</th>' + lunchDays.map(d=>{
+    const marked = !!DATA.holidays[WEEK[d]];
+    return `<th class="${marked?'ns-on':''}">${d}<br><span style="font-weight:400;">${fmtDate(WEEK[d])}</span></th>`;
+  }).join('') + '<th>Set whole week</th></tr>';
   lunchRoutes.forEach((r)=>{
     const ri = DATA.routes.indexOf(r);
     html += `<tr><td><b>${r.name}</b><br><span class="note">${r.vehicle}</span></td>`;
     lunchDays.forEach(d=>{
       if(!r.lunch[d]){ html += `<td class="muted">—</td>`; return; }
+      const holiday = DATA.holidays[WEEK[d]];
+      if(holiday){ html += `<td class="ns-cell">— ${holiday.type} —</td>`; return; }
       const time = r.lunch[d].time || "12:00";
       const driver = r.lunch[d].driver || "";
       html += `<td>

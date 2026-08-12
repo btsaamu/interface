@@ -634,6 +634,80 @@
     }
     return null;
   }
+  // This week's real calendar dates (Mon-Sun), same math the Master Schedule itself uses.
+  function msGetWeekDates(){
+    const now = new Date();
+    const dow = now.getDay();
+    const diff = dow===0 ? -6 : 1-dow;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate()+diff);
+    const map = {};
+    MS_DAYS.forEach((d,i)=>{
+      const dt = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate()+i);
+      map[d] = dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
+    });
+    return map;
+  }
+  function msFmtShortDate(iso){
+    const [y,m,d] = iso.split("-").map(Number);
+    return new Date(y,m-1,d).toLocaleDateString("en-US",{month:"short", day:"numeric"});
+  }
+  // The driver's full week at a glance: route (or day off / no school) and lunch info per day.
+  // Reflects the current standing schedule — a one-off future-week plan staged in Master
+  // Schedule but not yet applied won't show here, only what's actually live.
+  function msFindWeekSchedule(msData, driverName){
+    if(!msData || !msData.routes) return null;
+    const weekDates = msGetWeekDates();
+    const norm = (s)=>(s||"").trim().toLowerCase();
+    const result = {};
+    MS_DAYS.forEach(day=>{
+      const dateISO = weekDates[day];
+      const holiday = msData.holidays && msData.holidays[dateISO];
+      if(holiday){ result[day] = {date:dateISO, holiday:holiday.type, routeName:null, lunch:null}; return; }
+      let found = null;
+      for(const r of msData.routes){
+        let matched = false;
+        if(r.days && r.days[day] && norm(r.days[day]).split('/').includes(norm(driverName))) matched = true;
+        if(!matched && r.shifts2 && r.shifts2[day]){
+          matched = r.shifts2[day].some(s => norm(s.driver).split('/').includes(norm(driverName)));
+        }
+        if(matched){ found = r; break; }
+      }
+      if(found){
+        const lunch = (found.lunch && found.lunch[day]) ? found.lunch[day] : null;
+        result[day] = {date:dateISO, holiday:null, routeName:found.name, lunch};
+      } else {
+        result[day] = {date:dateISO, holiday:null, routeName:null, lunch:null};
+      }
+    });
+    return result;
+  }
+  function myWeekHtml(){
+    const week = state.msWeekSchedule;
+    if(!week){
+      return `<div style="font-size:11.5px;color:var(--muted);">Week schedule not available right now — check your connection.</div>`;
+    }
+    const todayLabel = msGetTodayLabel();
+    return `<div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;">
+      ${MS_DAYS.map(day=>{
+        const info = week[day];
+        const isToday = day===todayLabel;
+        let rightContent;
+        if(info.holiday){ rightContent = `<span style="color:#C7973F;font-weight:700;">${info.holiday}</span>`; }
+        else if(info.routeName){ rightContent = `<span style="font-weight:700;color:var(--maroon-dark);">${info.routeName}</span>`; }
+        else { rightContent = `<span style="color:var(--muted);">Day Off</span>`; }
+        let lunchLine = "";
+        if(info.lunch && info.lunch.time){
+          const parts = info.lunch.time.split(":");
+          const mins = parseInt(parts[0],10)*60 + parseInt(parts[1],10);
+          lunchLine = `<div style="font-size:10px;color:var(--muted);margin-top:1px;">Lunch ${fmtClock(mins)}${info.lunch.driver?(' · '+info.lunch.driver):''}</div>`;
+        }
+        return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:7px 10px;${isToday?'background:#FBF3E1;':''}border-bottom:1px solid var(--line);font-size:12px;">
+          <div style="flex:none;width:76px;"><b>${day}</b><br><span style="font-size:10px;color:var(--muted);">${msFmtShortDate(info.date)}</span></div>
+          <div style="flex:1;text-align:right;">${rightContent}${lunchLine}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
 
   function blankShift(){ return {pretrip:null, shiftEnded:false, posttrip:null, ridershipSubmitted:false}; }
   async function getShiftRecord(name){
@@ -676,7 +750,7 @@
     role:null, driverProfile:{}, driverLock:{status:'locked', name:'', vehicle:''}, dispatchPassword:null,
     myTrip:null, myCompletedTrips:[], shiftRoute:null, shiftVehicle:null, shiftCapacity:null,
     selectedRouteChoice:null, pretripAnswers:{}, pretripPhoto:null, pretripFuel:null, posttripFuel:null, postTripAnswers:{}, shiftRecord:null,
-    quickStartChecks:{}, pretripDamage:null, routeGridExpanded:false,
+    quickStartChecks:{}, pretripDamage:null, routeGridExpanded:false, myWeekExpanded:false, msWeekSchedule:null,
     stopPhase:'arriving', pendingStop:null, divertedName:'',
     pendingIds:new Set(), changingRoute:false,
     dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(), lastSignIns:[], lastSignInSearch:null, lastConsolidatedSearch:null,
@@ -920,9 +994,10 @@
       state.selectedRouteChoice = cs0.pretrip.route;
     }
     state.pretripAnswers = {}; state.pretripPhoto = null; state.pretripFuel = null; state.posttripFuel = null; state.postTripAnswers = {};
-    state.quickStartChecks = {}; state.pretripDamage = null; state.routeGridExpanded = false;
+    state.quickStartChecks = {}; state.pretripDamage = null; state.routeGridExpanded = false; state.myWeekExpanded = false;
     const msData = await fetchMasterScheduleData();
     state.msAssignment = msFindAssignment(msData, name);
+    state.msWeekSchedule = msFindWeekSchedule(msData, name);
     if(state.msAssignment && !state.selectedRouteChoice) state.selectedRouteChoice = state.msAssignment.routeKey;
     logDriverSignIn(name);
     await renderDriverHome();
@@ -980,6 +1055,11 @@
           <div class="field"><label>Capacity</label><input id="d-capacity" type="number" min="1" value="${state.shiftCapacity||DEFAULT_CAPACITY}"></div>
         </div>
         ${isEV ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Pick whichever bus is actually charged and available — your assignment may change if the vehicle you expected isn't ready.</div>` : ``}
+        <div id="myweek-toggle" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line);cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:11.5px;font-weight:700;color:var(--maroon-dark);text-transform:uppercase;letter-spacing:0.03em;">My Week</span>
+          <span id="myweek-chevron" style="font-size:11px;color:var(--muted);">${state.myWeekExpanded ? '▾ Hide' : '▸ Show'}</span>
+        </div>
+        <div id="myweek-body" style="display:${state.myWeekExpanded?'block':'none'};margin-top:8px;">${myWeekHtml()}</div>
       </div>
       ${asg ? `
       <div class="card" style="background:#EEF6F1;border-color:#2F6E62;">
@@ -1175,6 +1255,10 @@
     }
 
     document.getElementById("change-driver-btn").onclick = () => logoutDriver();
+    document.getElementById("myweek-toggle").onclick = () => {
+      state.myWeekExpanded = !state.myWeekExpanded;
+      renderPretripPage();
+    };
     document.getElementById("begin-route-btn").onclick = async () => { await beginRoute(already, items, isEV); };
   }
 
