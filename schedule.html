@@ -79,6 +79,15 @@
   .overlay{position:fixed;inset:0;z-index:49;background:transparent;}
   table.grid{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
   table.grid th:first-child, table.grid td:first-child{width:15%;}
+  .ns-toggle-row{display:flex;align-items:center;gap:5px;margin-top:5px;}
+  .ns-switch{position:relative;width:30px;height:16px;background:#D9D0C0;border-radius:9px;flex:none;cursor:pointer;}
+  .ns-switch .ns-knob{position:absolute;top:2px;left:2px;width:12px;height:12px;background:#fff;border-radius:50%;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:left .15s;}
+  .ns-switch.on{background:var(--gold);}
+  .ns-switch.on .ns-knob{left:16px;}
+  .ns-toggle-label{font-size:8.5px;color:#8a7d76;font-weight:700;text-transform:uppercase;letter-spacing:.02em;}
+  table.grid th.ns-on{background:#FBF3E1;}
+  table.grid th.ns-on .ns-toggle-label{color:var(--maroon-dark);}
+  td.ns-cell{text-align:center;color:#8a7d76;background:#FBF7F0;font-size:11px;}
   table.grid th:last-child, table.grid td:last-child{width:15%;}
   table.grid th{background:#F3EEE6;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#8a7d76;padding:7px 6px;text-align:left;border:1px solid var(--line);}
   table.grid td{padding:4px 6px;border:1px solid var(--line);}
@@ -363,6 +372,7 @@ function renameDriverString(v){
 function driverOptionsHTML(selected){
   const roster = getRoster();
   let html = `<option value="" ${!selected?'selected':''}>— Unassigned —</option>`;
+  html += `<option value="N/A" ${selected==='N/A'?'selected':''}>N/A — Route Not Running</option>`;
   html += `<optgroup label="Full-Time">` + roster.fullTime.map(n=>`<option value="${n}" ${n===selected?'selected':''}>${n}</option>`).join('') + `</optgroup>`;
   html += `<optgroup label="Part-Time">` + roster.partTime.map(n=>`<option value="${n}" ${n===selected?'selected':''}>${n}</option>`).join('') + `</optgroup>`;
   return html;
@@ -478,8 +488,8 @@ function getTodayLabel(){ const dow=new Date().getDay(); return DAYS[dow===0?6:d
 function getAllDriverNames(){
   const set = new Set();
   DATA.routes.forEach(r=>{
-    Object.values(r.days||{}).forEach(v=>{ if(v && v!=="UNASSIGNED") v.split('/').forEach(n=>set.add(n.trim())); });
-    if(r.shifts2){ Object.values(r.shifts2).forEach(arr=>arr.forEach(s=>{ if(s.driver && s.driver!=="UNASSIGNED") set.add(s.driver.trim()); })); }
+    Object.values(r.days||{}).forEach(v=>{ if(v && v!=="UNASSIGNED" && v!=="N/A") v.split('/').forEach(n=>set.add(n.trim())); });
+    if(r.shifts2){ Object.values(r.shifts2).forEach(arr=>arr.forEach(s=>{ if(s.driver && s.driver!=="UNASSIGNED" && s.driver!=="N/A") set.add(s.driver.trim()); })); }
     if(r.lunch){ Object.values(r.lunch).forEach(l=>{ if(l.driver) set.add(l.driver.trim()); }); }
   });
   DATA.relief.forEach(rel=>{
@@ -492,8 +502,8 @@ function getAssignedOn(dayLabel){
   const set = new Set();
   DATA.routes.forEach(r=>{
     const v = r.days ? r.days[dayLabel] : undefined;
-    if(v && v!=="UNASSIGNED") v.split('/').forEach(n=>set.add(n.trim()));
-    if(r.shifts2 && r.shifts2[dayLabel]) r.shifts2[dayLabel].forEach(s=>{ if(s.driver && s.driver!=="UNASSIGNED") set.add(s.driver.trim()); });
+    if(v && v!=="UNASSIGNED" && v!=="N/A") v.split('/').forEach(n=>set.add(n.trim()));
+    if(r.shifts2 && r.shifts2[dayLabel]) r.shifts2[dayLabel].forEach(s=>{ if(s.driver && s.driver!=="UNASSIGNED" && s.driver!=="N/A") set.add(s.driver.trim()); });
     if(r.lunch && r.lunch[dayLabel] && r.lunch[dayLabel].driver) set.add(r.lunch[dayLabel].driver.trim());
   });
   DATA.relief.forEach(rel=>{
@@ -549,8 +559,8 @@ async function saveData(){
 function getWeeklyDemandHours(){
   let total = 0;
   DATA.routes.forEach(r=>{
-    Object.keys(r.days).forEach(()=>{ total += (toMin(r.end)-toMin(r.start))/60; });
-    if(r.shifts2) Object.values(r.shifts2).forEach(arr=>arr.forEach(s=>{ total += (toMin(s.end)-toMin(s.start))/60; }));
+    Object.keys(r.days).forEach(day=>{ if(r.days[day]!=="N/A") total += (toMin(r.end)-toMin(r.start))/60; });
+    if(r.shifts2) Object.values(r.shifts2).forEach(arr=>arr.forEach(s=>{ if(s.driver!=="N/A") total += (toMin(s.end)-toMin(s.start))/60; }));
   });
   return total;
 }
@@ -564,7 +574,7 @@ function getDriverHours(){
     const shiftMin = toMin(r.end) - toMin(r.start);
     Object.keys(r.days).forEach(day=>{
       const val = r.days[day];
-      if(!val || val==="UNASSIGNED") return;
+      if(!val || val==="UNASSIGNED" || val==="N/A") return;
       let mins = shiftMin;
       let lunchDriver = null;
       if(r.lunch && r.lunch[day]){
@@ -579,7 +589,7 @@ function getDriverHours(){
     if(r.shifts2){
       Object.keys(r.shifts2).forEach(day=>{
         r.shifts2[day].forEach(s=>{
-          if(!s.driver || s.driver==="UNASSIGNED") return;
+          if(!s.driver || s.driver==="UNASSIGNED" || s.driver==="N/A") return;
           const mins = toMin(s.end) - toMin(s.start);
           const names = s.driver.split('/').map(x=>x.trim()).filter(Boolean);
           const share = mins / names.length;
@@ -915,7 +925,7 @@ function openShiftEditor(r, day, shiftIdx, anchorEl){
   input.addEventListener('keydown', e=>{ if(e.key==='Escape') closeEditor(); });
 }
 
-function routeActiveOn(r,d){ return !!r.days[d] || !!(r.shifts2 && r.shifts2[d]); }
+function routeActiveOn(r,d){ return (!!r.days[d] && r.days[d]!=="N/A") || !!(r.shifts2 && r.shifts2[d]); }
 let scheduleSubTab = 'week';
 function renderScheduleSubNav(activeKey){
   const wrap = document.createElement('div'); wrap.className='daytabs';
@@ -959,6 +969,7 @@ function renderSchedule(){
           <option value="" ${!holidayForDay?'selected':''}>Normal schedule</option>
           <option value="Holiday" ${holidayForDay&&holidayForDay.type==='Holiday'?'selected':''}>Holiday</option>
           <option value="Snow Day" ${holidayForDay&&holidayForDay.type==='Snow Day'?'selected':''}>Snow Day</option>
+          <option value="No School" ${holidayForDay&&holidayForDay.type==='No School'?'selected':''}>No School</option>
           <option value="Other" ${holidayForDay&&holidayForDay.type==='Other'?'selected':''}>Other</option>
         </select>
       </div>
@@ -1253,14 +1264,37 @@ function renderWeek(){
   el.appendChild(renderScheduleSubNav('week'));
   const gridCard = document.createElement('div'); gridCard.className='card';
   gridCard.innerHTML = `<h2 class="display">Week schedule</h2>
-    <p class="note">Changes here update the Dashboard and Schedule tabs immediately. Choose "— Unassigned —" to mark a shift open. Cells for days a route doesn't normally run are shown as "—". Use "Set whole week" on the right to fill every day at once instead of one cell at a time.</p>
+    <p class="note">Changes here update the Dashboard and Schedule tabs immediately. Choose "— Unassigned —" to mark a shift open. Cells for days a route doesn't normally run are shown as "—". Use "Set whole week" on the right to fill every day at once instead of one cell at a time. Toggle "No School" under a date to switch that day to East WKND/West WKND only.</p>
     <table class="grid" id="weekGrid"></table>`;
   el.appendChild(gridCard);
   const table = document.getElementById('weekGrid');
-  let html = '<tr><th>Route</th>' + DAYS.map(d=>`<th>${d}<br><span style="font-weight:400;">${fmtDate(WEEK[d])}</span></th>`).join('') + '<th>Set whole week</th></tr>';
+  let html = '<tr><th>Route</th>' + DAYS.map(d=>{
+    const dateISO = WEEK[d];
+    const isWeekday = ["Mon","Tue","Wed","Thu","Fri"].includes(d);
+    const marked = !!DATA.holidays[dateISO];
+    const toggleHtml = isWeekday ? `
+      <div class="ns-toggle-row" data-ns-toggle="${d}">
+        <div class="ns-switch${marked?' on':''}"><div class="ns-knob"></div></div>
+        <span class="ns-toggle-label">No School</span>
+      </div>` : ``;
+    return `<th class="${marked?'ns-on':''}">${d}<br><span style="font-weight:400;">${fmtDate(dateISO)}</span>${toggleHtml}</th>`;
+  }).join('') + '<th>Set whole week</th></tr>';
   DATA.routes.forEach((r,ri)=>{
     html += `<tr><td><b>${r.name}</b><br><span class="note">${r.vehicle}</span></td>`;
     DAYS.forEach(d=>{
+      const dateISO = WEEK[d];
+      const holiday = DATA.holidays[dateISO];
+      const isWeekendRoute = (r.name==="East WKND" || r.name==="West WKND");
+      if(holiday){
+        if(isWeekendRoute){
+          const cur = holiday.assignments[r.name];
+          const val = (!cur || cur==="UNASSIGNED") ? "" : cur;
+          html += `<td><select data-holiday-date="${dateISO}" data-holiday-route="${r.name}" style="${!val?'border-color:var(--danger);color:var(--danger);':''}">${driverOptionsHTML(val)}</select></td>`;
+        } else {
+          html += `<td class="ns-cell">— ${holiday.type} —</td>`;
+        }
+        return;
+      }
       if(r.shifts2 && r.shifts2[d]){
         html += `<td>` + r.shifts2[d].map((s,si)=>{
           const val = s.driver==="UNASSIGNED" ? "" : s.driver;
@@ -1284,6 +1318,29 @@ function renderWeek(){
     return `<td>${trips.map(t=>`<span style="color:${statusColor(t.status)};font-weight:700;">●</span> ${t.pickup}→${t.destination}<br><span class="note">${label(t.departure)}–${label(t.return)} · ${t.status}</span>`).join('<hr style="border:none;border-top:1px solid var(--line);margin:4px 0;">')}</td>`;
   }).join('') + `<td></td></tr>`;
   table.innerHTML = html;
+
+  table.querySelectorAll('[data-ns-toggle]').forEach(row=>{
+    row.onclick = ()=>{
+      const d = row.dataset.nsToggle;
+      const dateISO = WEEK[d];
+      if(DATA.holidays[dateISO]){
+        delete DATA.holidays[dateISO];
+      } else {
+        DATA.holidays[dateISO] = {type:"No School", label:"", assignments:{"East WKND":"UNASSIGNED","West WKND":"UNASSIGNED"}};
+      }
+      saveData();
+      renderWeek();
+    };
+  });
+  table.querySelectorAll('[data-holiday-date]').forEach(sel=>{
+    sel.onchange = ()=>{
+      const dateISO = sel.dataset.holidayDate, routeName = sel.dataset.holidayRoute;
+      const val = sel.value.trim();
+      DATA.holidays[dateISO].assignments[routeName] = val===""?"UNASSIGNED":val;
+      saveData();
+      renderAll();
+    };
+  });
   table.querySelectorAll('[data-bulk-week]').forEach(btn=>{
     btn.onclick = ()=>{
       const ri = parseInt(btn.dataset.bulkWeek);
@@ -1301,6 +1358,7 @@ function renderWeek(){
   });
   table.querySelectorAll('select').forEach(inp=>{
     if(inp.id && inp.id.startsWith('bulkWeek-')) return;
+    if(inp.dataset.holidayDate !== undefined) return;
     inp.onchange = ()=>{
       const ri = parseInt(inp.dataset.ri), d = inp.dataset.day;
       const val = inp.value.trim();
