@@ -1062,17 +1062,20 @@
         <div id="myweek-body" style="display:${state.myWeekExpanded?'block':'none'};margin-top:8px;">${myWeekHtml()}</div>
       </div>
       ${asg ? `
-      <div class="card" style="background:#EEF6F1;border-color:#2F6E62;">
-        <div style="font-size:10px;font-weight:800;color:#2F6E62;text-transform:uppercase;letter-spacing:0.04em;">Today's Assignment</div>
-        <div style="font-size:18px;font-weight:800;color:var(--maroon-dark);margin:4px 0 2px;">${routeShort(asg.routeKey)}</div>
-        <div style="font-size:11px;color:var(--muted);">Set by dispatch · Master Schedule</div>
-        ${asg.lunch ? `
-        <div style="background:#FBF3E1;border:1px solid #C7973F;border-radius:10px;padding:10px 12px;text-align:center;margin-top:10px;">
-          <div style="font-size:9.5px;color:#8a7d76;text-transform:uppercase;letter-spacing:0.04em;font-weight:800;">Lunch Today</div>
-          <div style="font-size:15px;font-weight:800;color:var(--maroon-dark);margin:3px 0 1px;">${asg.lunch.time ? fmtClock((parseInt(asg.lunch.time.split(':')[0],10)*60)+parseInt(asg.lunch.time.split(':')[1],10)) : '—'}</div>
-          <div style="font-size:11px;color:#55504A;">Relief: ${asg.lunch.driver || 'not yet assigned'}</div>
-        </div>` : ``}
-        ${!already && !state.routeGridExpanded ? `<div style="text-align:center;margin-top:10px;"><button class="link-btn" id="show-route-grid-btn">Not right? Change route</button></div>` : ``}
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <div class="card" style="flex:1;background:#EEF6F1;border-color:#2F6E62;text-align:center;padding:12px 10px;margin-bottom:0;">
+          <div style="font-size:9px;font-weight:800;color:#2F6E62;text-transform:uppercase;letter-spacing:0.04em;">Today's Assignment</div>
+          <div style="font-size:${routeShort(asg.routeKey).length>14?'13px':'16px'};font-weight:800;color:var(--maroon-dark);margin:5px 0 2px;line-height:1.15;">${routeShort(asg.routeKey)}</div>
+          <div style="font-size:10px;color:var(--muted);">Set by dispatch</div>
+          ${!already && !state.routeGridExpanded ? `<div style="margin-top:6px;"><button class="link-btn" id="show-route-grid-btn" style="font-size:10.5px;">Not right? Change route</button></div>` : ``}
+        </div>
+        <div class="card" style="flex:1;background:#FBF3E1;border-color:#C7973F;text-align:center;padding:12px 10px;margin-bottom:0;">
+          <div style="font-size:9px;font-weight:800;color:#8a7d76;text-transform:uppercase;letter-spacing:0.04em;">Lunch Today</div>
+          ${asg.lunch ? `
+          <div style="font-size:16px;font-weight:800;color:var(--maroon-dark);margin:5px 0 2px;">${asg.lunch.time ? fmtClock((parseInt(asg.lunch.time.split(':')[0],10)*60)+parseInt(asg.lunch.time.split(':')[1],10)) : '—'}</div>
+          <div style="font-size:10px;color:#55504A;">Relief: ${asg.lunch.driver || 'not yet assigned'}</div>
+          ` : `<div style="font-size:13px;font-weight:700;color:var(--muted);margin-top:8px;">None assignment</div>`}
+        </div>
       </div>` : ``}
       ${(!asg || state.routeGridExpanded || already) ? `
       <div class="card">
@@ -1991,6 +1994,27 @@
     }
   }
 
+  function captureDispatchInputs(){
+    const map = {};
+    dispatchView.querySelectorAll('input[id]').forEach(el=>{
+      map[el.id] = {value: el.value, focused: document.activeElement===el, selStart: el.selectionStart, selEnd: el.selectionEnd};
+    });
+    return map;
+  }
+  function restoreDispatchInputs(map){
+    Object.keys(map).forEach(id=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      const saved = map[id];
+      if(saved.value) el.value = saved.value;
+      if(saved.focused){
+        el.focus();
+        if(el.setSelectionRange && typeof saved.selStart === 'number'){
+          try{ el.setSelectionRange(saved.selStart, saved.selEnd); }catch(e){}
+        }
+      }
+    });
+  }
   async function refreshDispatch(){
     const res = await loadDayForWrite();
     if(res.ok){ state.day = res.data; state.lastKnownDay = res.data; }
@@ -1999,7 +2023,9 @@
     state.lastIssues = issues;
     state.lastSignIns = await loadDriverSignIns();
     if(state.dispatchTab === 'map' && busMapInstance) return; // don't tear down the live map's DOM every 5s
+    const preserved = captureDispatchInputs();
     renderDispatch(issues);
+    restoreDispatchInputs(preserved);
   }
 
   async function loadDriverSignIns(dateStr){
