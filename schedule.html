@@ -1195,6 +1195,18 @@ function setPlannedValue(weekStartISO, route, day, val, shiftIdx){
     DATA.weekOverrides[weekStartISO][route.name][day] = val;
   }
 }
+function getPlannedHoliday(weekStartISO, dateISO){
+  return DATA.weekOverrides[weekStartISO] && DATA.weekOverrides[weekStartISO].__holidays && DATA.weekOverrides[weekStartISO].__holidays[dateISO];
+}
+function togglePlannedHoliday(weekStartISO, dateISO){
+  if(!DATA.weekOverrides[weekStartISO]) DATA.weekOverrides[weekStartISO] = {};
+  if(!DATA.weekOverrides[weekStartISO].__holidays) DATA.weekOverrides[weekStartISO].__holidays = {};
+  if(DATA.weekOverrides[weekStartISO].__holidays[dateISO]){
+    delete DATA.weekOverrides[weekStartISO].__holidays[dateISO];
+  } else {
+    DATA.weekOverrides[weekStartISO].__holidays[dateISO] = {type:"No School", label:"", assignments:{"East WKND":"UNASSIGNED","West WKND":"UNASSIGNED"}};
+  }
+}
 let planSelectedMonday = null;
 
 function renderLunch(){
@@ -1389,26 +1401,56 @@ function renderWeek(){
   if(!planSelectedMonday) planSelectedMonday = addDaysISO(WEEK.Mon, 7);
   const planCard = document.createElement('div'); planCard.className='card';
   planCard.innerHTML = `<h2 class="display">Plan a future week</h2>
-    <p class="note">Pick any date in the week you want to plan. Changes here are staged separately — they won't touch the live schedule until you click "Apply this plan," so it's safe to try out a vacation swap and see if any gaps show up first.</p>
-    <div class="form-row" style="grid-template-columns:1fr 1fr;margin-bottom:14px;">
+    <p class="note">Pick any date in the week you want to plan and click "Load week." Changes here are staged separately — they won't touch the live schedule until you click "Apply this plan," so it's safe to try out a vacation swap and see if any gaps show up first.</p>
+    <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:14px;">
       <div><label>Any date in the week to plan</label><input type="date" id="planDatePicker" value="${planSelectedMonday}"></div>
+      <div><button class="addbtn" id="planLoadWeek">Load week</button></div>
       <div><button class="addbtn" id="planApply">Apply this plan to the live schedule</button></div>
     </div>
     <table class="grid" id="planGrid"></table>
     <div id="planConcerns" style="margin-top:14px;"></div>`;
   el.appendChild(planCard);
 
-  document.getElementById('planDatePicker').onchange = (e)=>{
-    planSelectedMonday = mondayISOFrom(e.target.value);
+  function loadPlanWeek(){
+    const raw = document.getElementById('planDatePicker').value;
+    if(!raw) return; // guard against a momentarily-empty value from the native date picker
+    const parsed = mondayISOFrom(raw);
+    if(parsed.includes('NaN')) return; // guard against an unparseable value
+    planSelectedMonday = parsed;
     renderWeek();
-  };
+  }
+  document.getElementById('planDatePicker').onchange = loadPlanWeek;
+  document.getElementById('planLoadWeek').onclick = loadPlanWeek;
 
   const planWeek = weekDatesFromMonday(planSelectedMonday);
   const planTable = document.getElementById('planGrid');
-  let phtml = '<tr><th>Route</th>' + DAYS.map(d=>`<th>${d}<br><span style="font-weight:400;">${fmtDate(planWeek[d])}</span></th>`).join('') + '</tr>';
+  let phtml = '<tr><th>Route</th>' + DAYS.map(d=>{
+    const dateISO = planWeek[d];
+    const isWeekday = ["Mon","Tue","Wed","Thu","Fri"].includes(d);
+    const marked = !!getPlannedHoliday(planSelectedMonday, dateISO);
+    const toggleHtml = isWeekday ? `
+      <div class="ns-toggle-row" data-plan-ns-toggle="${d}">
+        <div class="ns-switch${marked?' on':''}"><div class="ns-knob"></div></div>
+        <span class="ns-toggle-label">No School</span>
+      </div>` : ``;
+    return `<th class="${marked?'ns-on':''}">${d}<br><span style="font-weight:400;">${fmtDate(dateISO)}</span>${toggleHtml}</th>`;
+  }).join('') + '<th>Set whole week</th></tr>';
   DATA.routes.forEach((r,ri)=>{
     phtml += `<tr><td><b>${r.name}</b><br><span class="note">${r.vehicle}</span></td>`;
     DAYS.forEach(d=>{
+      const dateISO = planWeek[d];
+      const holiday = getPlannedHoliday(planSelectedMonday, dateISO);
+      const isWeekendRoute = (r.name==="East WKND" || r.name==="West WKND");
+      if(holiday){
+        if(isWeekendRoute){
+          const cur = holiday.assignments[r.name];
+          const val = (!cur || cur==="UNASSIGNED") ? "" : cur;
+          phtml += `<td><select data-plan-holiday-date="${dateISO}" data-plan-holiday-route="${r.name}" style="${!val?'border-color:var(--danger);color:var(--danger);':''}">${driverOptionsHTML(val)}</select></td>`;
+        } else {
+          phtml += `<td class="ns-cell">— ${holiday.type} —</td>`;
+        }
+        return;
+      }
       if(r.shifts2 && r.shifts2[d]){
         phtml += `<td>` + r.shifts2[d].map((s,si)=>{
           const val = getPlannedValue(planSelectedMonday, r, d, si);
@@ -1424,10 +1466,51 @@ function renderWeek(){
         phtml += `<td><select data-ri="${ri}" data-day="${d}" style="${isOverride?'border-color:#C7973F;border-width:2px;':''}">${driverOptionsHTML(shown)}</select></td>`;
       }
     });
+    phtml += `<td>
+      <select id="bulkPlan-${ri}" style="margin-bottom:4px;">${driverOptionsHTML('')}</select>
+      <button class="addbtn" data-bulk-plan="${ri}" style="width:100%;padding:5px 0;font-size:10.5px;">Apply</button>
+    </td>`;
     phtml += '</tr>';
   });
   planTable.innerHTML = phtml;
+
+  planTable.querySelectorAll('[data-plan-ns-toggle]').forEach(row=>{
+    row.onclick = ()=>{
+      const d = row.dataset.planNsToggle;
+      togglePlannedHoliday(planSelectedMonday, planWeek[d]);
+      saveData();
+      renderWeek();
+    };
+  });
+  planTable.querySelectorAll('[data-plan-holiday-date]').forEach(sel=>{
+    sel.onchange = ()=>{
+      const dateISO = sel.dataset.planHolidayDate, routeName = sel.dataset.planHolidayRoute;
+      const val = sel.value.trim();
+      DATA.weekOverrides[planSelectedMonday].__holidays[dateISO].assignments[routeName] = val===""?"UNASSIGNED":val;
+      saveData();
+      renderWeek();
+    };
+  });
+  planTable.querySelectorAll('[data-bulk-plan]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const ri = parseInt(btn.dataset.bulkPlan);
+      const r = DATA.routes[ri];
+      const sel = document.getElementById('bulkPlan-'+ri);
+      const val = sel.value.trim();
+      const finalVal = val===""?"UNASSIGNED":val;
+      Object.keys(r.days).forEach(d=>{ setPlannedValue(planSelectedMonday, r, d, finalVal); });
+      if(r.shifts2){
+        Object.keys(r.shifts2).forEach(d=>{
+          r.shifts2[d].forEach((s,si)=>{ setPlannedValue(planSelectedMonday, r, d, finalVal, si); });
+        });
+      }
+      saveData();
+      renderWeek();
+    };
+  });
   planTable.querySelectorAll('select').forEach(inp=>{
+    if(inp.id && inp.id.startsWith('bulkPlan-')) return;
+    if(inp.dataset.planHolidayDate !== undefined) return;
     inp.onchange = ()=>{
       const ri = parseInt(inp.dataset.ri), d = inp.dataset.day;
       const r = DATA.routes[ri];
@@ -1447,9 +1530,11 @@ function renderWeek(){
   const gaps = [];
   DATA.routes.forEach(r=>{
     Object.keys(r.days).forEach(d=>{
+      if(getPlannedHoliday(planSelectedMonday, planWeek[d])) return; // no-school days don't need this route covered
       if(getPlannedValue(planSelectedMonday, r, d) === "UNASSIGNED") gaps.push(`${r.name} — ${d} (${fmtDate(planWeek[d])})`);
     });
     if(r.shifts2) Object.keys(r.shifts2).forEach(d=>{
+      if(getPlannedHoliday(planSelectedMonday, planWeek[d])) return;
       r.shifts2[d].forEach((s,si)=>{ if(getPlannedValue(planSelectedMonday, r, d, si)==="UNASSIGNED") gaps.push(`${r.name} (${si===0?'AM':'PM'}) — ${d} (${fmtDate(planWeek[d])})`); });
     });
   });
@@ -1463,6 +1548,7 @@ function renderWeek(){
     const overrides = DATA.weekOverrides[planSelectedMonday];
     if(overrides){
       Object.keys(overrides).forEach(routeName=>{
+        if(routeName === '__holidays') return;
         const r = DATA.routes.find(x=>x.name===routeName);
         if(!r) return;
         Object.keys(overrides[routeName]).forEach(d=>{
@@ -1474,6 +1560,11 @@ function renderWeek(){
           }
         });
       });
+      if(overrides.__holidays){
+        Object.keys(overrides.__holidays).forEach(dateISO=>{
+          DATA.holidays[dateISO] = overrides.__holidays[dateISO];
+        });
+      }
       delete DATA.weekOverrides[planSelectedMonday];
     }
     saveData(); renderAll();
