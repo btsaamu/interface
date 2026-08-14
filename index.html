@@ -458,6 +458,7 @@
     {name:"AL-1", capacity:28}, {name:"AL-2", capacity:28}, {name:"AL-3", capacity:28},
     {name:"AL-5", capacity:28}, {name:"Mini EV", capacity:19}
   ];
+  const TRIPS_DIESEL_VEHICLES = ["799", "582", "401"];
   const EV_QUICK_START_STEPS = [
     "Exterior panels check",
     "Curbside rear access panel check",
@@ -873,7 +874,7 @@
     pretripMileage:'', pretripExplains:{}, damageExplainText:'',
     stopPhase:'arriving', pendingStop:null, divertedName:'',
     pendingIds:new Set(), changingRoute:false,
-    dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(), lastSignIns:[], lastSignInSearch:null, lastConsolidatedSearch:null,
+    dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(), lastSignIns:[], lastSignInSearch:null, lastConsolidatedSearch:null, simplifiedRoutePassengers:{total:0, byRoute:{}},
     day:{trips:[]}, lastKnownDay:{trips:[]}, pollHandle:null, flushHandle:null
   };
   state.flushHandle = setInterval(flushPending, 8000);
@@ -1159,9 +1160,11 @@
     const asg = state.msAssignment;
     const routeDef = ROUTES[state.selectedRouteChoice];
     const isTrips = !!(routeDef && routeDef.dualVehicle);
-    const isEV = !!(routeDef && routeDef.simplified) && !isTrips;
-    const isDiesel = isTrips && state.tripVehicleType === 'Diesel Bus';
-    const isVan = isTrips && state.tripVehicleType === '15-Passenger Van';
+    const tripIsEVVehicle = isTrips && EV_VEHICLES.some(v=>v.name===state.tripVehicleType);
+    const tripIsDieselVehicle = isTrips && TRIPS_DIESEL_VEHICLES.includes(state.tripVehicleType);
+    const isEV = (!!(routeDef && routeDef.simplified) && !isTrips) || tripIsEVVehicle;
+    const isDiesel = tripIsDieselVehicle;
+    const isVan = isTrips && state.tripVehicleType === 'Van';
     const useSectioned = isEV || isDiesel;
     const items = isDiesel ? DIESEL_PRETRIP_ITEMS : (isEV ? EV_PRETRIP_ITEMS : PRETRIP_ITEMS);
     const mileageLabel = (isEV || isDiesel) ? 'Beginning Odometer' : 'Starting Mileage';
@@ -1175,9 +1178,16 @@
           <div class="field"><label>Vehicle</label>
             ${isTrips
               ? `<select id="d-vehicle">
-                   <option value="">Select a vehicle type…</option>
-                   <option value="Diesel Bus" ${state.tripVehicleType==='Diesel Bus'?'selected':''}>Diesel Bus</option>
-                   <option value="15-Passenger Van" ${state.tripVehicleType==='15-Passenger Van'?'selected':''}>15-Passenger Van</option>
+                   <option value="">Select a vehicle…</option>
+                   <optgroup label="Electric">
+                     ${EV_VEHICLES.map(v=>`<option value="${v.name}" ${state.tripVehicleType===v.name?'selected':''}>${v.name}</option>`).join("")}
+                   </optgroup>
+                   <optgroup label="Diesel">
+                     ${TRIPS_DIESEL_VEHICLES.map(v=>`<option value="${v}" ${state.tripVehicleType===v?'selected':''}>${v}</option>`).join("")}
+                   </optgroup>
+                   <optgroup label="Van">
+                     <option value="Van" ${state.tripVehicleType==='Van'?'selected':''}>Van</option>
+                   </optgroup>
                  </select>`
               : isEV
               ? `<select id="d-vehicle">
@@ -1189,7 +1199,7 @@
           <div class="field"><label>Capacity</label><input id="d-capacity" type="number" min="1" value="${state.shiftCapacity||DEFAULT_CAPACITY}"></div>
         </div>
         ${isEV ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Pick whichever bus is actually charged and available — your assignment may change if the vehicle you expected isn't ready.</div>` : ``}
-        ${isTrips ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Diesel Bus uses the full bus pre-trip checklist; 15-Passenger Van uses the standard off-campus checklist.</div>` : ``}
+        ${isTrips ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">AL-1&ndash;AL-5 and Mini EV use the e-bus checklist; 799, 582, and 401 use the diesel bus checklist; Van uses the standard off-campus checklist.</div>` : ``}
         <div id="myweek-toggle" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line);cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
           <span style="font-size:11.5px;font-weight:700;color:var(--maroon-dark);text-transform:uppercase;letter-spacing:0.03em;">My Week</span>
           <span id="myweek-chevron" style="font-size:11px;color:var(--muted);">${state.myWeekExpanded ? '▾ Hide' : '▸ Show'}</span>
@@ -1281,7 +1291,9 @@
       vInput.onchange = () => {
         state.tripVehicleType = vInput.value;
         state.pretripAnswers = {}; state.pretripExplains = {};
-        state.quickStartChecks = {}; state.pretripDamage = null; state.tripVehicleType = null;
+        state.quickStartChecks = {}; state.pretripDamage = null;
+        const foundEV = EV_VEHICLES.find(v=>v.name===state.tripVehicleType);
+        if(foundEV) state.shiftCapacity = foundEV.capacity;
         renderPretripPage();
       };
     } else if(isEV){
@@ -1995,8 +2007,10 @@
     const lastTrip = state.myCompletedTrips[state.myCompletedTrips.length-1];
     const routeDef = lastTrip ? ROUTES[lastTrip.route] : null;
     const isTrips = !!(routeDef && routeDef.dualVehicle);
-    const isEV = !!(routeDef && routeDef.simplified) && !isTrips;
-    const isDiesel = isTrips && lastTrip && lastTrip.vehicleType === 'Diesel Bus';
+    const tripIsEVVehicle = isTrips && lastTrip && EV_VEHICLES.some(v=>v.name===lastTrip.vehicleType);
+    const tripIsDieselVehicle = isTrips && lastTrip && TRIPS_DIESEL_VEHICLES.includes(lastTrip.vehicleType);
+    const isEV = (!!(routeDef && routeDef.simplified) && !isTrips) || tripIsEVVehicle;
+    const isDiesel = tripIsDieselVehicle;
     const useSectioned = isEV || isDiesel;
     const showTotalPassengers = !!(routeDef && routeDef.simplified);
     const items = isDiesel ? DIESEL_POSTTRIP_ITEMS : (isEV ? EV_POSTTRIP_ITEMS : POSTTRIP_ITEMS);
@@ -2005,6 +2019,7 @@
         <div class="card-label">Post-Trip Inspection</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Please answer each question before submitting.</div>
         ${showTotalPassengers ? `<div class="field-bignum"><label>Total Passengers This Shift</label><input id="pp-total-passengers" type="number" min="0" inputmode="numeric" placeholder="0"></div>` : ``}
+        ${isEV ? `<div class="field-bignum"><label>Ending Odometer</label><input id="pp-mileage" type="number" min="0" inputmode="numeric" placeholder="0"></div>` : ``}
         <div class="pt-item">
           <div class="pt-item-label">Ending ${isEV?'Charge':'Fuel'} Level</div>
           ${isEV ? chargeChipsHtml("pp-fuel-chips", state.posttripFuel) : fuelChipsHtml("pp-fuel-chips", state.posttripFuel)}
@@ -2042,16 +2057,21 @@
       const missingFuel = !state.posttripFuel;
       const totalInput = document.getElementById("pp-total-passengers");
       const missingTotal = showTotalPassengers && (!totalInput || !totalInput.value.trim());
+      const mileageInput = document.getElementById("pp-mileage");
+      const missingMileage = isEV && (!mileageInput || !mileageInput.value.trim());
       if(missingFuel) document.getElementById("pp-fuel-chips").classList.add("pt-error-field");
       if(missingTotal) totalInput.closest(".field-bignum").classList.add("pt-error-field");
-      if(missingQuestions || missingFuel || missingTotal){
-        alert(`Please complete every item — including ${isEV?'charge level':'fuel level'}${showTotalPassengers?' and total passengers':''} — before submitting.`);
-        if(missingTotal) totalInput.scrollIntoView({behavior:"smooth", block:"center"});
+      if(missingMileage) mileageInput.closest(".field-bignum").classList.add("pt-error-field");
+      if(missingQuestions || missingFuel || missingTotal || missingMileage){
+        alert(`Please complete every item — including ${isEV?'ending odometer and charge level':'fuel level'}${showTotalPassengers?' and total passengers':''} — before submitting.`);
+        if(missingMileage) mileageInput.scrollIntoView({behavior:"smooth", block:"center"});
+        else if(missingTotal) totalInput.scrollIntoView({behavior:"smooth", block:"center"});
         else if(missingFuel) document.getElementById("pp-fuel-chips").scrollIntoView({behavior:"smooth", block:"center"});
         return;
       }
       const answers = items.map((q,i)=>({question:q, answer:state.postTripAnswers[i], note: state.postTripAnswers[i]==='yes' ? (document.getElementById("pp-explain-"+i).value||"") : ""}));
       currentShift().posttrip = {done:true, answers, endingFuel:state.posttripFuel, completedAt:new Date().toISOString()};
+      if(isEV) currentShift().posttrip.endingMileage = mileageInput.value.trim();
       if(showTotalPassengers) currentShift().posttrip.totalPassengers = parseInt(totalInput.value,10) || 0;
       await saveShiftRecord(state.driverLock.name, state.shiftRecord);
       renderDaySummaryPage();
@@ -2206,10 +2226,41 @@
     const issues = await loadVehicleIssues();
     state.lastIssues = issues;
     state.lastSignIns = await loadDriverSignIns();
+    state.simplifiedRoutePassengers = await loadSimplifiedRoutePassengers();
     if(state.dispatchTab === 'map' && busMapInstance) return; // don't tear down the live map's DOM every 5s
     const preserved = captureDispatchInputs();
     renderDispatch(issues);
     restoreDispatchInputs(preserved);
+  }
+
+  // Sums Post-Trip "Total Passengers" from on-campus and Trips routes (which don't log
+  // per-stop counts) so they count toward dispatch's overall rider total. Also broken down
+  // per route so each route box can show a real number instead of always reading 0.
+  async function loadSimplifiedRoutePassengers(dateStr){
+    dateStr = dateStr || todayKey();
+    const result = {total: 0, byRoute: {}};
+    try{
+      const listRes = await window.storage.list("bts-shift-", true);
+      if(!listRes || !listRes.keys) return result;
+      const suffix = "-"+dateStr;
+      const todayKeys = listRes.keys.filter(k=>k.endsWith(suffix));
+      for(const key of todayKeys){
+        try{
+          const r = await window.storage.get(key, true);
+          if(!r) continue;
+          const rec = JSON.parse(r.value);
+          const shiftsArr = rec.shifts ? rec.shifts : [rec];
+          shiftsArr.forEach(sh=>{
+            if(sh.posttrip && typeof sh.posttrip.totalPassengers === 'number'){
+              result.total += sh.posttrip.totalPassengers;
+              const routeKey = sh.pretrip && sh.pretrip.route;
+              if(routeKey) result.byRoute[routeKey] = (result.byRoute[routeKey]||0) + sh.posttrip.totalPassengers;
+            }
+          });
+        }catch(e){}
+      }
+    }catch(e){}
+    return result;
   }
 
   async function loadDriverSignIns(dateStr){
@@ -2610,7 +2661,8 @@
 
   function renderDispatch(issues){
     const trips = state.day.trips;
-    const going = trips.reduce((s,t)=>s+(t.departGoing||0)+t.stops.reduce((a,x)=>a+(x.going||0),0),0);
+    const simplifiedPassengers = state.simplifiedRoutePassengers || {total:0, byRoute:{}};
+    const going = trips.reduce((s,t)=>s+(t.departGoing||0)+t.stops.reduce((a,x)=>a+(x.going||0),0),0) + simplifiedPassengers.total;
     const coming = trips.reduce((s,t)=>s+(t.departComing||0)+t.stops.reduce((a,x)=>a+(x.coming||0),0),0);
     const leftBehind = trips.reduce((s,t)=>s+(t.departLeftBehind||0)+t.stops.reduce((a,x)=>a+(x.leftBehind||0),0),0);
     const openAlerts = [];
