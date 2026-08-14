@@ -79,7 +79,7 @@
   .overlay{position:fixed;inset:0;z-index:49;background:transparent;}
   table.grid{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
   table.grid th:first-child, table.grid td:first-child{width:15%;}
-  .linkbtn-sm{display:block;font-size:9.5px;color:var(--maroon);background:none;border:none;text-decoration:underline;cursor:pointer;padding:3px 0 0 0;}
+  .linkbtn-sm{display:block;width:100%;margin-top:4px;font-size:10px;font-weight:700;color:#fff;background:var(--maroon);border:none;border-radius:4px;padding:4px 5px;cursor:pointer;text-align:center;}
   .ns-toggle-row{display:flex;align-items:center;gap:5px;margin-top:5px;}
   .ns-switch{position:relative;width:30px;height:16px;background:#D9D0C0;border-radius:9px;flex:none;cursor:pointer;}
   .ns-switch .ns-knob{position:absolute;top:2px;left:2px;width:12px;height:12px;background:#fff;border-radius:50%;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:left .15s;}
@@ -604,6 +604,16 @@ function getDriverHours(){
         });
       });
     }
+  });
+  DATA.trips.forEach(t=>{
+    if(t.status === "Cancelled") return;
+    if(!Object.values(WEEK).includes(t.date)) return; // only this week's trips count toward these totals
+    const drivers = (t.drivers||[]).filter(Boolean);
+    if(drivers.length===0) return;
+    const mins = toMin(t.return) - toMin(t.departure);
+    if(mins <= 0) return;
+    const share = mins / drivers.length;
+    drivers.forEach(n=>{ totals[n] = (totals[n]||0) + share; });
   });
   return Object.entries(totals).map(([name,min])=>({name, hours: min/60})).sort((a,b)=>b.hours-a.hours);
 }
@@ -1437,16 +1447,30 @@ function renderWeek(){
 
   const tripsThisWeek = DATA.trips.filter(t=>Object.values(WEEK).includes(t.date)).sort((a,b)=>a.date.localeCompare(b.date));
   const tCard = document.createElement('div'); tCard.className='card';
-  tCard.innerHTML = `<h2 class="display">This week's trip requests</h2>`;
+  tCard.innerHTML = `<h2 class="display">This week's trip requests</h2>
+    <p class="note">Assign drivers here to make sure their hours count toward this week's totals — same as assigning them in the Trip Requests tab.</p>`;
   if(tripsThisWeek.length===0){ tCard.innerHTML += `<div class="empty">None — add trips in the Trip Requests tab.</div>`; }
   else{
     tripsThisWeek.forEach(t=>{
+      const tripIndex = DATA.trips.indexOf(t);
       const div=document.createElement('div'); div.className='trip-item';
-      div.innerHTML = `<b>${fmtDate(t.date)}</b> — ${t.pickup} → ${t.destination} · ${label(t.departure)}–${label(t.return)} · ${tripDriversLabel(t)}`;
+      div.innerHTML = `<div><b>${fmtDate(t.date)}</b> — ${t.pickup} → ${t.destination} · ${label(t.departure)}–${label(t.return)}</div>
+        <div style="margin-top:4px;display:flex;align-items:center;gap:8px;">
+          <label style="font-size:11px;color:#8a7d76;">Driver(s):</label>
+          <select data-trip-drivers="${tripIndex}" multiple size="3" style="flex:1;">${driverMultiOptionsHTML(t.drivers||[])}</select>
+        </div>`;
       tCard.appendChild(div);
     });
   }
   el.appendChild(tCard);
+  tCard.querySelectorAll('[data-trip-drivers]').forEach(sel=>{
+    sel.onchange = ()=>{
+      const idx = parseInt(sel.dataset.tripDrivers);
+      DATA.trips[idx].drivers = Array.from(sel.selectedOptions).map(o=>o.value);
+      saveData();
+      renderAll();
+    };
+  });
 
   // ---- plan a future week ----
   if(!planSelectedMonday) planSelectedMonday = addDaysISO(WEEK.Mon, 7);
