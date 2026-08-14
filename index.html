@@ -141,6 +141,12 @@
   .field{flex:1;min-width:120px;}
   .field label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:600;}
   .field input, .field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:7px;font-size:14px;background:var(--cream);color:var(--ink);}
+  .field-bignum{background:white;border:2px solid var(--gold);border-radius:14px;padding:12px 14px;text-align:center;margin-bottom:10px;}
+  .field-bignum label{font-size:10.5px;font-weight:800;color:var(--maroon-dark);text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:6px;}
+  .field-bignum input{width:100%;border:none;background:transparent;font-size:30px;font-weight:800;color:var(--maroon-dark);text-align:center;padding:4px 0;font-family:inherit;}
+  .field-bignum input::placeholder{color:#d8cbb5;font-weight:700;}
+  .field-bignum input:focus{outline:none;}
+  .field-bignum.pt-error-field{border-color:var(--alert-red);}
   .field input:focus, .field select:focus{outline:2px solid var(--maroon);outline-offset:1px;}
   .btn{border:none;border-radius:8px;padding:12px 16px;font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:0.04em;cursor:pointer;width:100%;}
   .btn-primary{background:var(--maroon);color:var(--gold-light);}
@@ -323,7 +329,8 @@
     bulldog:          {label:"Bulldog", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
     normal_hills:     {label:"Normal Hills", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
     paratransit:      {label:"Paratransit", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
-    paratransit_night:{label:"Paratransit Night", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:18, endHour:22, legs:[{label:"Depart AAMU",offset:0}]}}
+    paratransit_night:{label:"Paratransit Night", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:18, endHour:22, legs:[{label:"Depart AAMU",offset:0}]}},
+    trips:            {label:"Trips", category:"On-Campus", simplified:true, dualVehicle:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}}
   };
   const ROUTE_CATEGORIES = ["On-Campus","Day","Night","Weekend/Holiday"];
   function routeShort(key){ return ROUTES[key].label; }
@@ -498,6 +505,64 @@
     "Did you notice any issues with the doors or windows?",
     "Did any damage occur to this vehicle during your shift?"
   ];
+
+  // ---- Diesel bus fleet: Trips route, when "Diesel Bus" is the chosen vehicle ----
+  const DIESEL_PRETRIP_SECTIONS = [
+    { label: "Under the Hood", items: [
+      "Fluid leaks (puddles on the ground under the bus)",
+      "Oil level (add only if below the mark on the dipstick)",
+      "Belts — alternator & power steering (tight, free of cracks/chips)",
+      "Power steering fluid level (full cold/full hot marks)",
+      "Coolant level (full cold/full marks on reservoir)",
+      "Battery (fluid level, corrosion, cables tight)",
+      "Windshield washer fluid level",
+      "Hoses & miscellaneous (cracks, swelling, leaks, broken/loose items)",
+      "Automatic transmission oil (level, color, smell)"
+    ]},
+    { label: "From the Driver's Seat", items: [
+      "Brake warning light (lights with key in cranking position)",
+      "Brake lights & reverse lights",
+      "Brakes: pulling or grabbing",
+      "Emergency brake (apply, try to move forward/backward)",
+      "Other lights (headlights, signals, hazards, clearance lamps)",
+      "Gauges on dash (fuel, coolant temp, charging rate, oil pressure)",
+      "Dash lights (bad bulbs, adjustment)",
+      "Horn (both tones)",
+      "Steering: loose or pulling",
+      "Door operations (switches and linkages)",
+      "Wipers & washers (both speeds, streaks, aim)",
+      "Fans (all speeds by sound)",
+      "Mirrors & front windows (clean, unbroken, adjusted)"
+    ]},
+    { label: "Walk Around the Vehicle", items: [
+      "Wheels (tire tread depth, uniformity, lug nuts)",
+      "Tire pressure",
+      "All lamps (blown bulbs, broken lenses)",
+      "Differential & rear wheel leaks",
+      "Emergency door (buzzer sound, ease of opening)",
+      "Exhaust (pressure, listen for leaks)",
+      "Lift (operates down & up, low power, loose joint, binding)",
+      "Body (clean, new dents or scrapes)"
+    ]},
+    { label: "Back on the Bus", items: [
+      "Rear windows, seats, floor (clean, cracks, cuts)",
+      "Escape windows & vents (ease of opening, buzzer sound)",
+      "Fire extinguisher (charge indication)",
+      "First aid kit (complete, sealed packets)",
+      "Triangular reflectors (cracks or broken pieces)"
+    ]}
+  ];
+  const DIESEL_PRETRIP_ITEMS = DIESEL_PRETRIP_SECTIONS.flatMap(s=>s.items);
+  const DIESEL_POSTTRIP_ITEMS = [
+    "Did you notice any issues with the brakes during your shift?",
+    "Did you notice any issues with the lights (headlights, signals, hazards, brake lights, or dash lights)?",
+    "Did you notice any fluid leaks (oil, coolant, power steering, or transmission)?",
+    "Did you notice any issues with the horn?",
+    "Did you notice any pulling, looseness, or alignment issues with the steering?",
+    "Did you notice any tire issues (pressure, wear, or damage)?",
+    "Did you notice any issues with the doors, wipers, or emergency exits?",
+    "Did any damage occur to this vehicle during your shift?"
+  ];
   const CHARGE_LEVELS = ["Full","3/4","1/2","1/4","Low"];
   function chargeChipsHtml(id, selected){
     return `<div class="fuel-chip-row" id="${id}">${CHARGE_LEVELS.map(f=>`<div class="fuel-chip${selected===f?' active':''}" data-fuel="${f}">${f}</div>`).join("")}</div>`;
@@ -620,6 +685,16 @@
     const today = msGetTodayLabel();
     const todayISO = msGetTodayISO();
     const norm = (s)=>(s||"").trim().toLowerCase();
+
+    // A scheduled Trip for today takes priority over the normal route or a holiday.
+    if(msData.trips){
+      const trip = msData.trips.find(t => t.date === todayISO && t.status !== 'Cancelled' &&
+        (t.drivers||[]).some(d => norm(d) === norm(driverName)));
+      if(trip){
+        return {routeKey:'trips', routeName:'Trips', lunch:null, trip};
+      }
+    }
+
     const holiday = msData.holidays && msData.holidays[todayISO];
     if(holiday){
       const assignments = holiday.assignments || {};
@@ -761,7 +836,7 @@
     role:null, driverProfile:{}, driverLock:{status:'locked', name:'', vehicle:''}, dispatchPassword:null,
     myTrip:null, myCompletedTrips:[], shiftRoute:null, shiftVehicle:null, shiftCapacity:null,
     selectedRouteChoice:null, pretripAnswers:{}, pretripPhoto:null, pretripFuel:null, posttripFuel:null, postTripAnswers:{}, shiftRecord:null,
-    quickStartChecks:{}, pretripDamage:null, routeGridExpanded:false, myWeekExpanded:false, msWeekSchedule:null,
+    quickStartChecks:{}, pretripDamage:null, routeGridExpanded:false, myWeekExpanded:false, msWeekSchedule:null, tripVehicleType:null,
     pretripMileage:'', pretripExplains:{}, damageExplainText:'',
     stopPhase:'arriving', pendingStop:null, divertedName:'',
     pendingIds:new Set(), changingRoute:false,
@@ -1007,7 +1082,7 @@
     }
     state.pretripAnswers = {}; state.pretripPhoto = null; state.pretripFuel = null; state.posttripFuel = null; state.postTripAnswers = {};
     state.pretripMileage = ''; state.pretripExplains = {}; state.damageExplainText = '';
-    state.quickStartChecks = {}; state.pretripDamage = null; state.routeGridExpanded = false; state.myWeekExpanded = false;
+    state.quickStartChecks = {}; state.pretripDamage = null; state.tripVehicleType = null; state.routeGridExpanded = false; state.myWeekExpanded = false;
     const msData = await fetchMasterScheduleData();
     state.msAssignment = msFindAssignment(msData, name);
     state.msWeekSchedule = msFindWeekSchedule(msData, name);
@@ -1049,8 +1124,14 @@
     const already = !!(currentShift().pretrip && currentShift().pretrip.done);
     const asg = state.msAssignment;
     const routeDef = ROUTES[state.selectedRouteChoice];
-    const isEV = !!(routeDef && routeDef.simplified);
-    const items = isEV ? EV_PRETRIP_ITEMS : PRETRIP_ITEMS;
+    const isTrips = !!(routeDef && routeDef.dualVehicle);
+    const isEV = !!(routeDef && routeDef.simplified) && !isTrips;
+    const isDiesel = isTrips && state.tripVehicleType === 'Diesel Bus';
+    const isVan = isTrips && state.tripVehicleType === '15-Passenger Van';
+    const useSectioned = isEV || isDiesel;
+    const items = isDiesel ? DIESEL_PRETRIP_ITEMS : (isEV ? EV_PRETRIP_ITEMS : PRETRIP_ITEMS);
+    const mileageLabel = (isEV || isDiesel) ? 'Beginning Odometer' : 'Starting Mileage';
+    const fuelLabel = isEV ? 'Beginning Charge' : 'Starting Fuel';
     driverView.innerHTML = `
       <div class="card">
         <div class="card-label">Driver <button class="link-btn" id="change-driver-btn">Change Driver</button></div>
@@ -1058,7 +1139,13 @@
         <div class="mono" style="margin-bottom:10px;">${todayDisplay()}</div>
         <div class="field-row">
           <div class="field"><label>Vehicle</label>
-            ${isEV
+            ${isTrips
+              ? `<select id="d-vehicle">
+                   <option value="">Select a vehicle type…</option>
+                   <option value="Diesel Bus" ${state.tripVehicleType==='Diesel Bus'?'selected':''}>Diesel Bus</option>
+                   <option value="15-Passenger Van" ${state.tripVehicleType==='15-Passenger Van'?'selected':''}>15-Passenger Van</option>
+                 </select>`
+              : isEV
               ? `<select id="d-vehicle">
                    <option value="">Select a vehicle…</option>
                    ${EV_VEHICLES.map(v=>`<option value="${v.name}" ${state.shiftVehicle===v.name?'selected':''}>${v.name}</option>`).join("")}
@@ -1068,6 +1155,7 @@
           <div class="field"><label>Capacity</label><input id="d-capacity" type="number" min="1" value="${state.shiftCapacity||DEFAULT_CAPACITY}"></div>
         </div>
         ${isEV ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Pick whichever bus is actually charged and available — your assignment may change if the vehicle you expected isn't ready.</div>` : ``}
+        ${isTrips ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Diesel Bus uses the full bus pre-trip checklist; 15-Passenger Van uses the standard off-campus checklist.</div>` : ``}
         <div id="myweek-toggle" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line);cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
           <span style="font-size:11.5px;font-weight:700;color:var(--maroon-dark);text-transform:uppercase;letter-spacing:0.03em;">My Week</span>
           <span id="myweek-chevron" style="font-size:11px;color:var(--muted);">${state.myWeekExpanded ? '▾ Hide' : '▸ Show'}</span>
@@ -1079,13 +1167,13 @@
         <div class="card" style="flex:1;background:${asg.holiday && !asg.routeKey ? '#F3EEE6' : '#EEF6F1'};border-color:${asg.holiday && !asg.routeKey ? 'var(--muted)' : '#2F6E62'};text-align:center;padding:12px 10px;margin-bottom:0;">
           <div style="font-size:9px;font-weight:800;color:${asg.holiday && !asg.routeKey ? 'var(--muted)' : '#2F6E62'};text-transform:uppercase;letter-spacing:0.04em;">Today's Assignment</div>
           ${asg.routeKey ? `
-          <div style="font-size:${routeShort(asg.routeKey).length>14?'13px':'16px'};font-weight:800;color:var(--maroon-dark);margin:5px 0 2px;line-height:1.15;">${routeShort(asg.routeKey)}</div>
-          <div style="font-size:10px;color:var(--muted);">${asg.holiday ? asg.holiday : 'Set by dispatch'}</div>
+          <div style="font-size:${routeShort(asg.routeKey).length>14?'13px':'16px'};font-weight:800;color:var(--maroon-dark);margin:5px 0 2px;line-height:1.15;">${asg.trip ? 'TRIP' : routeShort(asg.routeKey)}</div>
+          <div style="font-size:10px;color:var(--muted);">${asg.holiday ? asg.holiday : (asg.trip ? asg.trip.destination : 'Set by dispatch')}</div>
           ` : `
           <div style="font-size:15px;font-weight:800;color:var(--maroon-dark);margin:5px 0 2px;">${asg.holiday}</div>
           <div style="font-size:10px;color:var(--muted);">Check with dispatch if you're covering today</div>
           `}
-          ${!asg.holiday && !already && !state.routeGridExpanded ? `<div style="margin-top:6px;"><button class="link-btn" id="show-route-grid-btn" style="font-size:10.5px;">Not right? Change route</button></div>` : ``}
+          ${!asg.holiday && !asg.trip && !already && !state.routeGridExpanded ? `<div style="margin-top:6px;"><button class="link-btn" id="show-route-grid-btn" style="font-size:10.5px;">Not right? Change route</button></div>` : ``}
         </div>
         ${!asg.holiday ? `
         <div class="card" style="flex:1;background:#FBF3E1;border-color:#C7973F;text-align:center;padding:12px 10px;margin-bottom:0;">
@@ -1102,17 +1190,17 @@
         ${asg && asg.routeKey && !asg.holiday && state.routeGridExpanded && !already ? `<div style="font-size:11px;color:var(--warn-orange);margin-bottom:8px;">Picking anything other than <strong>${routeShort(asg.routeKey)}</strong> notifies dispatch.</div>` : ``}
         <div id="route-grid"></div>
         <div class="disclosure" id="pretrip-next-run" style="display:none;"></div>
-        ${isEV ? `<div style="font-size:11px;color:var(--muted);margin-top:8px;">This route logs a total passenger count on Post-Trip instead of counting at each stop — just Pre-Trip now, drive your route, then Post-Trip when you're done.</div>` : ``}
+        ${(isEV || isTrips) ? `<div style="font-size:11px;color:var(--muted);margin-top:8px;">This route logs a total passenger count on Post-Trip instead of counting at each stop — just Pre-Trip now, drive your route, then Post-Trip when you're done.</div>` : ``}
       </div>
       ` : ``}
       <div class="card">
         <div class="card-label">Pre-Trip Inspection</div>
         ${already
           ? `<div class="disclosure">✓ Pre-trip completed today at ${fmtSysTime(currentShift().pretrip.completedAt)}${currentShift().pretrip.checklist.some(c=>c.status==='bad')?' — issue(s) were reported.':''}${currentShift().pretrip.damage && currentShift().pretrip.damage.reported?' — damage was reported.':''}</div>
-             <div class="info-row"><span>${isEV?'Beginning Odometer':'Starting Mileage'}</span><strong>${currentShift().pretrip.startingMileage||'—'}</strong></div>
-             <div class="info-row"><span>${isEV?'Beginning Charge':'Starting Fuel'}</span><strong>${currentShift().pretrip.startingFuel||'—'}</strong></div>`
+             <div class="info-row"><span>${mileageLabel}</span><strong>${currentShift().pretrip.startingMileage||'—'}</strong></div>
+             <div class="info-row"><span>${fuelLabel}</span><strong>${currentShift().pretrip.startingFuel||'—'}</strong></div>`
           : `<div class="field-row">
-               <div class="field"><label>${isEV?'Beginning Odometer':'Starting Mileage'}</label><input id="pt-mileage" type="number" min="0" placeholder="Odometer reading" value="${state.pretripMileage||''}"></div>
+               <div class="field-bignum"><label>${mileageLabel}</label><input id="pt-mileage" type="number" min="0" inputmode="numeric" placeholder="0" value="${state.pretripMileage||''}"></div>
              </div>
              <div class="pt-item">
                <div class="pt-item-label">${isEV?'Beginning Charge':'Starting Fuel Level'}</div>
@@ -1124,7 +1212,7 @@
                <div id="quick-start-list"></div>
              </div>` : ``}
              <div id="pretrip-items"></div>
-             ${isEV ? `
+             ${useSectioned ? `
              <div class="pt-item">
                <div class="pt-item-label">Any new or noticeable damage?</div>
                <div class="pt-btns" id="damage-yn">
@@ -1148,7 +1236,14 @@
       <button class="btn btn-primary big-log-btn" id="begin-route-btn">BEGIN ROUTE</button>
     `;
     const vInput = document.getElementById("d-vehicle");
-    if(isEV){
+    if(isTrips){
+      vInput.onchange = () => {
+        state.tripVehicleType = vInput.value;
+        state.pretripAnswers = {}; state.pretripExplains = {};
+        state.quickStartChecks = {}; state.pretripDamage = null; state.tripVehicleType = null;
+        renderPretripPage();
+      };
+    } else if(isEV){
       vInput.onchange = () => {
         vInput.classList.remove("pt-error-field");
         const found = EV_VEHICLES.find(v=>v.name===vInput.value);
@@ -1175,7 +1270,7 @@
       wireRouteGrid(grid, (key) => {
         state.selectedRouteChoice = key;
         state.pretripAnswers = {}; // question sets differ between EV and standard routes
-        state.quickStartChecks = {}; state.pretripDamage = null;
+        state.quickStartChecks = {}; state.pretripDamage = null; state.tripVehicleType = null;
         state.pretripExplains = {}; state.damageExplainText = ''; state.pretripPhoto = null;
         renderPretripPage();
       });
@@ -1197,35 +1292,38 @@
             <input type="text" class="pt-explain" id="ptx-explain-${i}" placeholder="Describe the issue" value="${explainVal.replace(/"/g,'&quot;')}" style="display:${ans==='bad'?'block':'none'};">
           </div>`;
       }
-      if(isEV){
+      if(useSectioned){
         let idx = 0;
-        itemsBox.innerHTML = EV_PRETRIP_SECTIONS.map(section=>{
+        const sections = isEV ? EV_PRETRIP_SECTIONS : DIESEL_PRETRIP_SECTIONS;
+        itemsBox.innerHTML = sections.map(section=>{
           const rows = section.items.map(item=>ptItemHtml(item, idx++)).join("");
           return `<div class="section-label" style="font-size:10.5px;font-weight:800;color:var(--maroon-dark);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px;padding-bottom:5px;border-bottom:2px solid var(--gold);">${section.label}</div>
             ${section.note?`<div style="font-size:11px;color:var(--muted);margin:-2px 0 6px;">${section.note}</div>`:``}
             ${rows}`;
         }).join("");
 
-        const qsBox = document.getElementById("quick-start-list");
-        qsBox.innerHTML = EV_QUICK_START_STEPS.map((step,i)=>{
-          const checked = !!state.quickStartChecks[i];
-          return `
-          <div class="check-row" data-qidx="${i}" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer;">
-            <div class="qs-box" style="width:22px;height:22px;border:2.5px solid ${checked?'var(--success)':'var(--maroon)'};border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:900;color:white;font-size:14px;background:${checked?'var(--success)':''};">${checked?'✓':''}</div>
-            <div style="font-size:13.5px;font-weight:600;">${step}</div>
-          </div>`;
-        }).join("");
-        qsBox.querySelectorAll(".check-row").forEach(row=>{
-          const i = row.dataset.qidx;
-          row.onclick = () => {
-            state.quickStartChecks[i] = !state.quickStartChecks[i];
-            const box = row.querySelector(".qs-box");
-            box.style.background = state.quickStartChecks[i] ? "var(--success)" : "";
-            box.style.borderColor = state.quickStartChecks[i] ? "var(--success)" : "var(--maroon)";
-            box.textContent = state.quickStartChecks[i] ? "✓" : "";
-            row.classList.remove("pt-error");
-          };
-        });
+        if(isEV){
+          const qsBox = document.getElementById("quick-start-list");
+          qsBox.innerHTML = EV_QUICK_START_STEPS.map((step,i)=>{
+            const checked = !!state.quickStartChecks[i];
+            return `
+            <div class="check-row" data-qidx="${i}" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer;">
+              <div class="qs-box" style="width:22px;height:22px;border:2.5px solid ${checked?'var(--success)':'var(--maroon)'};border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:900;color:white;font-size:14px;background:${checked?'var(--success)':''};">${checked?'✓':''}</div>
+              <div style="font-size:13.5px;font-weight:600;">${step}</div>
+            </div>`;
+          }).join("");
+          qsBox.querySelectorAll(".check-row").forEach(row=>{
+            const i = row.dataset.qidx;
+            row.onclick = () => {
+              state.quickStartChecks[i] = !state.quickStartChecks[i];
+              const box = row.querySelector(".qs-box");
+              box.style.background = state.quickStartChecks[i] ? "var(--success)" : "";
+              box.style.borderColor = state.quickStartChecks[i] ? "var(--success)" : "var(--maroon)";
+              box.textContent = state.quickStartChecks[i] ? "✓" : "";
+              row.classList.remove("pt-error");
+            };
+          });
+        }
       } else {
         itemsBox.innerHTML = items.map((item,i)=>ptItemHtml(item, i)).join("");
       }
@@ -1245,7 +1343,7 @@
         const idx = inp.id.replace("ptx-explain-","");
         inp.oninput = () => { state.pretripExplains[idx] = inp.value; if(inp.value.trim()) inp.closest(".pt-item").classList.remove("pt-error"); };
       });
-      document.getElementById("pt-mileage").oninput = (e) => { state.pretripMileage = e.target.value; if(e.target.value.trim()) e.target.classList.remove("pt-error-field"); };
+      document.getElementById("pt-mileage").oninput = (e) => { state.pretripMileage = e.target.value; if(e.target.value.trim()) e.target.closest(".field-bignum").classList.remove("pt-error-field"); };
       wireFuelChips("pt-fuel-chips", f => { state.pretripFuel = f; });
 
       if(isEV){
@@ -1278,11 +1376,12 @@
       state.myWeekExpanded = !state.myWeekExpanded;
       renderPretripPage();
     };
-    document.getElementById("begin-route-btn").onclick = async () => { await beginRoute(already, items, isEV); };
+    document.getElementById("begin-route-btn").onclick = async () => { await beginRoute(already, items, isEV, useSectioned, isDiesel); };
   }
 
-  async function beginRoute(already, items, isEV){
+  async function beginRoute(already, items, isEV, useSectioned, isDiesel){
     items = items || PRETRIP_ITEMS;
+    if(useSectioned === undefined) useSectioned = isEV;
     document.getElementById("route-grid").style.outline = "";
     document.getElementById("d-vehicle").classList.remove("pt-error-field");
     const vehicle = document.getElementById("d-vehicle").value.trim();
@@ -1304,7 +1403,7 @@
     if(!already){
       const mileageInput = document.getElementById("pt-mileage");
       const mileage = mileageInput.value.trim();
-      if(!mileage){ mileageInput.classList.add("pt-error-field"); firstError = firstError || mileageInput; }
+      if(!mileage){ mileageInput.closest(".field-bignum").classList.add("pt-error-field"); firstError = firstError || mileageInput; }
 
       const fuelBox = document.getElementById("pt-fuel-chips");
       if(!state.pretripFuel){ fuelBox.classList.add("pt-error-field"); firstError = firstError || fuelBox; }
@@ -1316,6 +1415,8 @@
           qsBox.querySelectorAll(".check-row").forEach(row=>{ if(!state.quickStartChecks[row.dataset.qidx]) row.classList.add("pt-error"); });
           firstError = firstError || qsBox;
         }
+      }
+      if(useSectioned){
         const damageExplainInp = document.getElementById("damage-explain");
         damageOk = !!state.pretripDamage && (state.pretripDamage!=='yes' || (damageExplainInp && damageExplainInp.value.trim()));
         if(!damageOk){
@@ -1347,9 +1448,11 @@
     if(!already){
       const mileage = document.getElementById("pt-mileage").value.trim();
       const checklist = items.map((item,i)=>({item, status:state.pretripAnswers[i], note: state.pretripAnswers[i]==='bad' ? document.getElementById("ptx-explain-"+i).value.trim() : ""}));
-      const pretripRecord = {done:true, route:state.selectedRouteChoice, vehicle, capacity, startingMileage:mileage, startingFuel:state.pretripFuel, checklist, photo: state.pretripPhoto||null, completedAt:new Date().toISOString()};
+      const pretripRecord = {done:true, route:state.selectedRouteChoice, vehicle, vehicleType: vehicle, capacity, startingMileage:mileage, startingFuel:state.pretripFuel, checklist, photo: state.pretripPhoto||null, completedAt:new Date().toISOString()};
       if(isEV){
         pretripRecord.quickStart = EV_QUICK_START_STEPS.map((step,i)=>({step, done: !!state.quickStartChecks[i]}));
+      }
+      if(useSectioned){
         pretripRecord.damage = {reported: state.pretripDamage==='yes', explain: state.pretripDamage==='yes' ? (document.getElementById("damage-explain").value||"").trim() : ""};
       }
       currentShift().pretrip = pretripRecord;
@@ -1384,6 +1487,8 @@
   // ================= SIMPLIFIED EV ROUTE (no per-stop logging) =================
   function renderSimpleTripPage(){
     const trip = state.myTrip;
+    const asg = state.msAssignment;
+    const tripDetails = asg && asg.trip;
     driverView.innerHTML = `
       <div class="card">
         <div class="card-label">En Route</div>
@@ -1392,6 +1497,16 @@
         <div class="info-row"><span>Vehicle</span><strong>${trip.vehicle}</strong></div>
         <div style="font-size:12px;color:var(--muted);margin-top:10px;">No stop-by-stop logging on this route — when you're done for the day, tap below and enter your total passenger count on Post-Trip.</div>
       </div>
+      ${tripDetails ? `
+      <div class="card" style="background:#EEF6F1;border-color:#2F6E62;">
+        <div class="card-label" style="color:#2F6E62;">Trip Details</div>
+        <div class="info-row"><span>Pickup</span><strong>${tripDetails.pickup}</strong></div>
+        <div class="info-row"><span>Destination</span><strong>${tripDetails.destination}</strong></div>
+        <div class="info-row"><span>Departure</span><strong>${label(tripDetails.departure)}</strong></div>
+        <div class="info-row"><span>Return</span><strong>${label(tripDetails.return)}</strong></div>
+        ${tripDetails.pointOfContact ? `<div class="info-row"><span>Point of Contact</span><strong>${tripDetails.pointOfContact}</strong></div>` : ``}
+        ${tripDetails.notes ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;font-weight:700;margin-bottom:3px;">Trip Notes</div><div style="font-size:13px;">${tripDetails.notes}</div></div>` : ``}
+      </div>` : ``}
       <button class="btn btn-primary big-log-btn" id="end-simple-route-btn">END ROUTE</button>
     `;
     document.getElementById("end-simple-route-btn").onclick = () => endShift();
@@ -1831,13 +1946,17 @@
   function renderPostTripPage(){
     const lastTrip = state.myCompletedTrips[state.myCompletedTrips.length-1];
     const routeDef = lastTrip ? ROUTES[lastTrip.route] : null;
-    const isEV = !!(routeDef && routeDef.simplified);
-    const items = isEV ? EV_POSTTRIP_ITEMS : POSTTRIP_ITEMS;
+    const isTrips = !!(routeDef && routeDef.dualVehicle);
+    const isEV = !!(routeDef && routeDef.simplified) && !isTrips;
+    const isDiesel = isTrips && lastTrip && lastTrip.vehicleType === 'Diesel Bus';
+    const useSectioned = isEV || isDiesel;
+    const showTotalPassengers = !!(routeDef && routeDef.simplified);
+    const items = isDiesel ? DIESEL_POSTTRIP_ITEMS : (isEV ? EV_POSTTRIP_ITEMS : POSTTRIP_ITEMS);
     driverView.innerHTML = `
       <div class="card">
         <div class="card-label">Post-Trip Inspection</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Please answer each question before submitting.</div>
-        ${isEV ? `<div class="field"><label>Total Passengers This Shift</label><input id="pp-total-passengers" type="number" min="0" placeholder="Everyone who boarded today"></div>` : ``}
+        ${showTotalPassengers ? `<div class="field-bignum"><label>Total Passengers This Shift</label><input id="pp-total-passengers" type="number" min="0" inputmode="numeric" placeholder="0"></div>` : ``}
         <div class="pt-item">
           <div class="pt-item-label">Ending ${isEV?'Charge':'Fuel'} Level</div>
           ${isEV ? chargeChipsHtml("pp-fuel-chips", state.posttripFuel) : fuelChipsHtml("pp-fuel-chips", state.posttripFuel)}
@@ -1874,18 +1993,18 @@
       const missingQuestions = items.some((_,i)=> !state.postTripAnswers[i]);
       const missingFuel = !state.posttripFuel;
       const totalInput = document.getElementById("pp-total-passengers");
-      const missingTotal = isEV && (!totalInput || !totalInput.value.trim());
+      const missingTotal = showTotalPassengers && (!totalInput || !totalInput.value.trim());
       if(missingFuel) document.getElementById("pp-fuel-chips").classList.add("pt-error-field");
-      if(missingTotal) totalInput.classList.add("pt-error-field");
+      if(missingTotal) totalInput.closest(".field-bignum").classList.add("pt-error-field");
       if(missingQuestions || missingFuel || missingTotal){
-        alert(`Please complete every item — including ${isEV?'charge level and total passengers':'fuel level'} — before submitting.`);
+        alert(`Please complete every item — including ${isEV?'charge level':'fuel level'}${showTotalPassengers?' and total passengers':''} — before submitting.`);
         if(missingTotal) totalInput.scrollIntoView({behavior:"smooth", block:"center"});
         else if(missingFuel) document.getElementById("pp-fuel-chips").scrollIntoView({behavior:"smooth", block:"center"});
         return;
       }
       const answers = items.map((q,i)=>({question:q, answer:state.postTripAnswers[i], note: state.postTripAnswers[i]==='yes' ? (document.getElementById("pp-explain-"+i).value||"") : ""}));
       currentShift().posttrip = {done:true, answers, endingFuel:state.posttripFuel, completedAt:new Date().toISOString()};
-      if(isEV) currentShift().posttrip.totalPassengers = parseInt(totalInput.value,10) || 0;
+      if(showTotalPassengers) currentShift().posttrip.totalPassengers = parseInt(totalInput.value,10) || 0;
       await saveShiftRecord(state.driverLock.name, state.shiftRecord);
       renderDaySummaryPage();
     };

@@ -79,6 +79,7 @@
   .overlay{position:fixed;inset:0;z-index:49;background:transparent;}
   table.grid{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
   table.grid th:first-child, table.grid td:first-child{width:15%;}
+  .linkbtn-sm{display:block;font-size:9.5px;color:var(--maroon);background:none;border:none;text-decoration:underline;cursor:pointer;padding:3px 0 0 0;}
   .ns-toggle-row{display:flex;align-items:center;gap:5px;margin-top:5px;}
   .ns-switch{position:relative;width:30px;height:16px;background:#D9D0C0;border-radius:9px;flex:none;cursor:pointer;}
   .ns-switch .ns-knob{position:absolute;top:2px;left:2px;width:12px;height:12px;background:#fff;border-radius:50%;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:left .15s;}
@@ -404,6 +405,18 @@ function migrateData(d){
   if(!d.routes.some(r=>r.name==="Bulldog 1")){
     const fresh = JSON.parse(JSON.stringify(DEFAULT_DATA.routes.find(r=>r.name==="Bulldog 1")));
     d.routes.splice(1, 0, fresh);
+  }
+  // Off-campus restructure: Elroy 1 -> Elroy (keeps its drivers); Elroy 2, the standalone
+  // Huntsville Place route, and the Constellation/Waterleaf/Dean combo are retired; a fresh
+  // combined Huntsville Place/Elroy route is added (left unassigned — no clean way to guess
+  // which retired route's drivers should carry over, so dispatch decides).
+  const elroy1 = d.routes.find(r=>r.name==="Elroy 1");
+  if(elroy1){ elroy1.name = "Elroy"; elroy1.vehicle = "Elroy Shuttle"; }
+  d.routes = d.routes.filter(r=>r.name!=="Elroy 2" && r.name!=="Huntsville Place" && r.name!=="Constellation/Waterleaf/Dean");
+  if(!d.routes.some(r=>r.name==="Huntsville Place/Elroy")){
+    const fresh = JSON.parse(JSON.stringify(DEFAULT_DATA.routes.find(r=>r.name==="Huntsville Place/Elroy")));
+    const deanIdx = d.routes.findIndex(r=>r.name==="Dean");
+    d.routes.splice(deanIdx>=0 ? deanIdx : d.routes.length, 0, fresh);
   }
   d.routes.forEach(r=>{
     if(r.days) Object.keys(r.days).forEach(day=>{ r.days[day] = renameDriverString(r.days[day]); });
@@ -1325,11 +1338,11 @@ function renderWeek(){
         html += `<td>` + r.shifts2[d].map((s,si)=>{
           const val = s.driver==="UNASSIGNED" ? "" : s.driver;
           return `<select data-ri="${ri}" data-day="${d}" data-shift="${si}" style="margin-bottom:3px;">${driverOptionsHTML(val)}</select>`;
-        }).join('') + `</td>`;
+        }).join('') + (r.cat==="On-Campus" ? `<button class="linkbtn-sm" data-merge-shift="${ri}" data-merge-day="${d}">Merge to one shift</button>` : ``) + `</td>`;
       } else if(r.days[d]===undefined){ html += `<td class="muted">—</td>`; }
       else {
         const val = r.days[d]==="UNASSIGNED" ? "" : r.days[d];
-        html += `<td><select data-ri="${ri}" data-day="${d}">${driverOptionsHTML(val)}</select></td>`;
+        html += `<td><select data-ri="${ri}" data-day="${d}">${driverOptionsHTML(val)}</select>` + (r.cat==="On-Campus" ? `<button class="linkbtn-sm" data-split-shift="${ri}" data-split-day="${d}">+ Split shift (7&ndash;12 / 11:30&ndash;6)</button>` : ``) + `</td>`;
       }
     });
     html += `<td>
@@ -1365,6 +1378,30 @@ function renderWeek(){
       DATA.holidays[dateISO].assignments[routeName] = val===""?"UNASSIGNED":val;
       saveData();
       renderAll();
+    };
+  });
+  table.querySelectorAll('[data-split-shift]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const ri = parseInt(btn.dataset.splitShift), d = btn.dataset.splitDay;
+      const r = DATA.routes[ri];
+      const existingDriver = (r.days[d] && r.days[d]!=="UNASSIGNED") ? r.days[d] : "UNASSIGNED";
+      if(!r.shifts2) r.shifts2 = {};
+      r.shifts2[d] = [{start:"7:00",end:"12:00",driver:existingDriver},{start:"11:30",end:"18:00",driver:"UNASSIGNED"}];
+      delete r.days[d];
+      saveData();
+      renderWeek();
+    };
+  });
+  table.querySelectorAll('[data-merge-shift]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const ri = parseInt(btn.dataset.mergeShift), d = btn.dataset.mergeDay;
+      const r = DATA.routes[ri];
+      const firstDriver = r.shifts2[d][0].driver;
+      r.days[d] = firstDriver || "UNASSIGNED";
+      delete r.shifts2[d];
+      if(Object.keys(r.shifts2).length===0) delete r.shifts2;
+      saveData();
+      renderWeek();
     };
   });
   table.querySelectorAll('[data-bulk-week]').forEach(btn=>{
@@ -1668,6 +1705,8 @@ function renderTrips(){
       <div><label>Return time</label><input type="time" id="trRet"></div>
       <div><label>Driver(s) assigned</label><select id="trDrivers" multiple size="5">${driverMultiOptionsHTML([])}</select></div>
       <div><label>Status</label><select id="trStatus"><option>Pending</option><option>Completed</option><option>Cancelled</option></select></div>
+      <div><label>Point of contact</label><input type="text" id="trPOC" placeholder="Name and/or phone number"></div>
+      <div style="grid-column:1/-1;"><label>Trip notes</label><input type="text" id="trNotes" placeholder="Anything the driver should know"></div>
     </div>
     <button class="addbtn" id="trAdd">Add trip</button></div>
     <div class="card"><h2 class="display">Trip log — full year</h2><div id="trList"></div></div>`;
@@ -1679,7 +1718,9 @@ function renderTrips(){
     const ret = document.getElementById('trRet').value;
     if(!date || !pickup || !destination || !departure || !ret) return;
     const drivers = Array.from(document.getElementById('trDrivers').selectedOptions).map(o=>o.value);
-    DATA.trips.push({date, pickup, destination, departure, return: ret, drivers, status: document.getElementById('trStatus').value});
+    const pointOfContact = document.getElementById('trPOC').value.trim();
+    const notes = document.getElementById('trNotes').value.trim();
+    DATA.trips.push({date, pickup, destination, departure, return: ret, drivers, status: document.getElementById('trStatus').value, pointOfContact, notes});
     saveData(); renderTrips();
   };
   const list = document.getElementById('trList');
@@ -1689,7 +1730,7 @@ function renderTrips(){
     sorted.forEach(({t,i})=>{
       const div=document.createElement('div'); div.className='trip-item'; div.style.display='flex'; div.style.justifyContent='space-between'; div.style.alignItems='center';
       const span=document.createElement('span');
-      span.innerHTML = `<b>${fmtDate(t.date)}</b> — ${t.pickup} → ${t.destination} · ${label(t.departure)}–${label(t.return)} · ${tripDriversLabel(t)}`;
+      span.innerHTML = `<b>${fmtDate(t.date)}</b> — ${t.pickup} → ${t.destination} · ${label(t.departure)}–${label(t.return)} · ${tripDriversLabel(t)}${t.pointOfContact?` · POC: ${t.pointOfContact}`:''}${t.notes?`<br><span class="note">${t.notes}</span>`:''}`;
       const right=document.createElement('div'); right.style.display='flex'; right.style.gap='8px'; right.style.alignItems='center';
       const statusSel=document.createElement('select'); statusSel.style.cssText=`border:1px solid ${statusColor(t.status)};color:${statusColor(t.status)};border-radius:4px;padding:3px 6px;font-size:11px;font-weight:700;`;
       ["Pending","Completed","Cancelled"].forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; if(t.status===s) o.selected=true; statusSel.appendChild(o); });
