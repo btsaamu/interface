@@ -1241,6 +1241,37 @@ function togglePlannedHoliday(weekStartISO, dateISO){
 }
 let planSelectedMonday = null;
 
+// Builds a frozen snapshot of what the planned week currently looks like (base
+// routes + staged overrides merged), for publishing to drivers as a preview.
+// This does NOT touch the live schedule — it's a read-only copy.
+function computePreviewSnapshot(weekStartISO){
+  const weekDates = weekDatesFromMonday(weekStartISO);
+  const snapshot = { weekStart: weekStartISO, publishedAt: new Date().toISOString(), days: {} };
+  DAYS.forEach(day=>{
+    const dateISO = weekDates[day];
+    const holiday = getPlannedHoliday(weekStartISO, dateISO);
+    snapshot.days[day] = { date: dateISO, holiday: holiday ? holiday.type : null, routes: {} };
+    if(holiday){
+      ["East WKND","West WKND"].forEach(routeName=>{
+        snapshot.days[day].routes[routeName] = (holiday.assignments && holiday.assignments[routeName]) || "UNASSIGNED";
+      });
+      return;
+    }
+    DATA.routes.forEach(r=>{
+      const ov = DATA.weekOverrides[weekStartISO] && DATA.weekOverrides[weekStartISO][r.name] && DATA.weekOverrides[weekStartISO][r.name][day];
+      const isSplit = Array.isArray(ov) ? true : (ov !== undefined ? false : !!(r.shifts2 && r.shifts2[day]));
+      if(isSplit){
+        snapshot.days[day].routes[r.name] = Array.isArray(ov) ? ov : r.shifts2[day].map(s=>s.driver);
+      } else if(r.days[day]!==undefined || ov!==undefined){
+        snapshot.days[day].routes[r.name] = ov!==undefined ? ov : r.days[day];
+        if(r.lunch && r.lunch[day]) snapshot.days[day].lunch = snapshot.days[day].lunch || {};
+        if(r.lunch && r.lunch[day]) snapshot.days[day].lunch[r.name] = r.lunch[day];
+      }
+    });
+  });
+  return snapshot;
+}
+
 function renderLunch(){
   const el = document.getElementById('view-lunch');
   el.innerHTML = '';
@@ -1475,15 +1506,31 @@ function renderWeek(){
   // ---- plan a future week ----
   if(!planSelectedMonday) planSelectedMonday = addDaysISO(WEEK.Mon, 7);
   const planCard = document.createElement('div'); planCard.className='card';
+  const preview = DATA.publishedPreview;
+  const previewStatusHtml = preview
+    ? `Drivers are currently seeing a preview for the week of <b>${fmtDate(preview.weekStart)}</b>, published ${new Date(preview.publishedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}. It won't update again until you publish.`
+    : `Nothing has been published to drivers yet.`;
   planCard.innerHTML = `<h2 class="display">Plan a future week</h2>
-    <p class="note">Pick any date in the week you want to plan and click "Load week." Changes here are staged separately — they won't touch the live schedule until you click "Apply this plan," so it's safe to try out a vacation swap and see if any gaps show up first.</p>
-    <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:14px;">
+    <p class="note">Pick any date in the week you want to plan and click "Load week." Changes here are staged separately — they won't touch the live schedule or anything drivers see until you explicitly publish or apply below.</p>
+    <div class="form-row" style="grid-template-columns:1fr 1fr;margin-bottom:14px;">
       <div><label>Any date in the week to plan</label><input type="date" id="planDatePicker" value="${planSelectedMonday}"></div>
       <div><button class="addbtn" id="planLoadWeek">Load week</button></div>
-      <div><button class="addbtn" id="planApply">Apply this plan to the live schedule</button></div>
     </div>
     <table class="grid" id="planGrid"></table>
-    <div id="planConcerns" style="margin-top:14px;"></div>`;
+    <div id="planConcerns" style="margin-top:14px;"></div>
+    <div style="display:flex;gap:14px;margin-top:16px;">
+      <div style="flex:1;background:#F3EEE6;border-radius:8px;padding:12px 14px;">
+        <div style="font-weight:800;font-size:12.5px;color:var(--maroon-dark);margin-bottom:4px;">Publish preview to drivers</div>
+        <div style="font-size:11.5px;color:#8a7d76;margin-bottom:8px;">Safe to do as often as you like — this only updates a "Next Week (Preview)" section drivers see, marked "subject to change." It never touches the live schedule.</div>
+        <button class="addbtn" id="planPublish" style="width:100%;">Publish this plan as preview</button>
+      </div>
+      <div style="flex:1;background:#F3EEE6;border-radius:8px;padding:12px 14px;">
+        <div style="font-weight:800;font-size:12.5px;color:var(--maroon-dark);margin-bottom:4px;">Apply to live schedule</div>
+        <div style="font-size:11.5px;color:#8a7d76;margin-bottom:8px;">Makes this the real, active schedule — use this once the week is final, not while you're still adjusting it.</div>
+        <button class="addbtn" id="planApply" style="width:100%;">Apply this plan to the live schedule</button>
+      </div>
+    </div>
+    <p class="note" id="planPreviewStatus" style="margin-top:10px;">${previewStatusHtml}</p>`;
   el.appendChild(planCard);
 
   function loadPlanWeek(){
@@ -1526,19 +1573,22 @@ function renderWeek(){
         }
         return;
       }
-      if(r.shifts2 && r.shifts2[d]){
-        phtml += `<td>` + r.shifts2[d].map((s,si)=>{
-          const val = getPlannedValue(planSelectedMonday, r, d, si);
+      const ov = DATA.weekOverrides[planSelectedMonday] && DATA.weekOverrides[planSelectedMonday][r.name] && DATA.weekOverrides[planSelectedMonday][r.name][d];
+      const isSplit = Array.isArray(ov) ? true : (ov !== undefined ? false : !!(r.shifts2 && r.shifts2[d]));
+      if(isSplit){
+        const vals = Array.isArray(ov) ? ov : (r.shifts2 && r.shifts2[d] ? r.shifts2[d].map(s=>s.driver) : ["UNASSIGNED","UNASSIGNED"]);
+        const isOverride = Array.isArray(ov);
+        phtml += `<td>` + vals.map((val,si)=>{
           const shown = val==="UNASSIGNED" ? "" : val;
-          const isOverride = DATA.weekOverrides[planSelectedMonday] && DATA.weekOverrides[planSelectedMonday][r.name] && DATA.weekOverrides[planSelectedMonday][r.name][d] !== undefined;
-          return `<select data-ri="${ri}" data-day="${d}" data-shift="${si}" style="margin-bottom:3px;${isOverride?'border-color:#C7973F;border-width:2px;':''}">${driverOptionsHTML(shown)}</select>`;
-        }).join('') + `</td>`;
-      } else if(r.days[d]===undefined){ phtml += `<td class="muted">—</td>`; }
-      else {
-        const val = getPlannedValue(planSelectedMonday, r, d);
-        const shown = val==="UNASSIGNED" ? "" : val;
-        const isOverride = DATA.weekOverrides[planSelectedMonday] && DATA.weekOverrides[planSelectedMonday][r.name] && DATA.weekOverrides[planSelectedMonday][r.name][d] !== undefined;
-        phtml += `<td><select data-ri="${ri}" data-day="${d}" style="${isOverride?'border-color:#C7973F;border-width:2px;':''}">${driverOptionsHTML(shown)}</select></td>`;
+          return `<select data-plan-split-ri="${ri}" data-plan-split-day="${d}" data-plan-split-idx="${si}" style="margin-bottom:3px;${isOverride?'border-color:#C7973F;border-width:2px;':''}">${driverOptionsHTML(shown)}</select>`;
+        }).join('') + (r.cat==="On-Campus" ? `<button class="linkbtn-sm" data-plan-merge-ri="${ri}" data-plan-merge-day="${d}">Merge to one shift</button>` : ``) + `</td>`;
+      } else if(r.days[d]===undefined && !(r.shifts2 && r.shifts2[d])){
+        phtml += `<td class="muted">—</td>`;
+      } else {
+        const val = ov !== undefined ? ov : r.days[d];
+        const shown = (!val || val==="UNASSIGNED") ? "" : val;
+        const isOverride = ov !== undefined;
+        phtml += `<td><select data-ri="${ri}" data-day="${d}" style="${isOverride?'border-color:#C7973F;border-width:2px;':''}">${driverOptionsHTML(shown)}</select>` + (r.cat==="On-Campus" ? `<button class="linkbtn-sm" data-plan-split-btn-ri="${ri}" data-plan-split-btn-day="${d}">+ Split shift (7&ndash;12 / 11:30&ndash;6)</button>` : ``) + `</td>`;
       }
     });
     phtml += `<td>
@@ -1583,9 +1633,53 @@ function renderWeek(){
       renderWeek();
     };
   });
+  planTable.querySelectorAll('[data-plan-split-btn-ri]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const ri = parseInt(btn.dataset.planSplitBtnRi), d = btn.dataset.planSplitBtnDay;
+      const r = DATA.routes[ri];
+      const currentVal = getPlannedValue(planSelectedMonday, r, d);
+      const existingDriver = (currentVal && currentVal!=="UNASSIGNED") ? currentVal : "UNASSIGNED";
+      if(!DATA.weekOverrides[planSelectedMonday]) DATA.weekOverrides[planSelectedMonday] = {};
+      if(!DATA.weekOverrides[planSelectedMonday][r.name]) DATA.weekOverrides[planSelectedMonday][r.name] = {};
+      DATA.weekOverrides[planSelectedMonday][r.name][d] = [existingDriver, "UNASSIGNED"];
+      saveData();
+      renderWeek();
+    };
+  });
+  planTable.querySelectorAll('[data-plan-merge-ri]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const ri = parseInt(btn.dataset.planMergeRi), d = btn.dataset.planMergeDay;
+      const r = DATA.routes[ri];
+      const ov = DATA.weekOverrides[planSelectedMonday] && DATA.weekOverrides[planSelectedMonday][r.name] && DATA.weekOverrides[planSelectedMonday][r.name][d];
+      const firstDriver = Array.isArray(ov) ? ov[0] : ((r.shifts2 && r.shifts2[d]) ? r.shifts2[d][0].driver : "UNASSIGNED");
+      if(!DATA.weekOverrides[planSelectedMonday]) DATA.weekOverrides[planSelectedMonday] = {};
+      if(!DATA.weekOverrides[planSelectedMonday][r.name]) DATA.weekOverrides[planSelectedMonday][r.name] = {};
+      DATA.weekOverrides[planSelectedMonday][r.name][d] = firstDriver || "UNASSIGNED";
+      saveData();
+      renderWeek();
+    };
+  });
+  planTable.querySelectorAll('[data-plan-split-ri]').forEach(sel=>{
+    sel.onchange = ()=>{
+      const ri = parseInt(sel.dataset.planSplitRi), d = sel.dataset.planSplitDay, idx = parseInt(sel.dataset.planSplitIdx);
+      const r = DATA.routes[ri];
+      const val = sel.value.trim();
+      if(!DATA.weekOverrides[planSelectedMonday]) DATA.weekOverrides[planSelectedMonday] = {};
+      if(!DATA.weekOverrides[planSelectedMonday][r.name]) DATA.weekOverrides[planSelectedMonday][r.name] = {};
+      let existing = DATA.weekOverrides[planSelectedMonday][r.name][d];
+      if(!Array.isArray(existing)){
+        existing = (r.shifts2 && r.shifts2[d]) ? r.shifts2[d].map(s=>s.driver) : ["UNASSIGNED","UNASSIGNED"];
+      }
+      existing[idx] = val===""?"UNASSIGNED":val;
+      DATA.weekOverrides[planSelectedMonday][r.name][d] = existing;
+      saveData();
+      renderWeek();
+    };
+  });
   planTable.querySelectorAll('select').forEach(inp=>{
     if(inp.id && inp.id.startsWith('bulkPlan-')) return;
     if(inp.dataset.planHolidayDate !== undefined) return;
+    if(inp.dataset.planSplitRi !== undefined) return;
     inp.onchange = ()=>{
       const ri = parseInt(inp.dataset.ri), d = inp.dataset.day;
       const r = DATA.routes[ri];
@@ -1619,6 +1713,11 @@ function renderWeek(){
     planConcernsEl.innerHTML = `<div class="conflicts"><h3 class="display">${gaps.length} open shift${gaps.length!==1?'s':''} in this plan</h3><ul>${gaps.map(g=>`<li>${g}</li>`).join('')}</ul></div>`;
   }
 
+  document.getElementById('planPublish').onclick = ()=>{
+    DATA.publishedPreview = computePreviewSnapshot(planSelectedMonday);
+    saveData();
+    renderWeek();
+  };
   document.getElementById('planApply').onclick = ()=>{
     const overrides = DATA.weekOverrides[planSelectedMonday];
     if(overrides){
@@ -1628,10 +1727,19 @@ function renderWeek(){
         if(!r) return;
         Object.keys(overrides[routeName]).forEach(d=>{
           const val = overrides[routeName][d];
-          if(r.shifts2 && r.shifts2[d]){
-            r.shifts2[d].forEach((s,si)=>{ s.driver = val[si]; });
-          } else if(r.days[d]!==undefined){
-            r.days[d] = val;
+          if(Array.isArray(val)){
+            if(!r.shifts2) r.shifts2 = {};
+            if(r.shifts2[d] && r.shifts2[d].length === val.length){
+              r.shifts2[d].forEach((s,si)=>{ s.driver = val[si]; });
+            } else {
+              r.shifts2[d] = [
+                {start:"7:00", end:"12:00", driver: val[0]},
+                {start:"11:30", end:"18:00", driver: val[1]}
+              ];
+            }
+          } else {
+            if(r.shifts2 && r.shifts2[d]) delete r.shifts2[d];
+            if(r.days[d]!==undefined) r.days[d] = val;
           }
         });
       });
