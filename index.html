@@ -321,8 +321,8 @@
                       {label:"Depart AAMU",offset:20},{label:"Arrive Huntsville Place",offset:40},{label:"Depart Huntsville Place",offset:45},{label:"Arrive Elroy",offset:50},{label:"Depart Elroy",offset:55},{label:"Arrive AAMU",offset:75}]}},
     east_night:   {label:"East Night: Dean/Waterleaf", category:"Night", stops:["Dean","Waterleaf"], schedule:{startHour:18, endHour:22, legs:[
                       {label:"Depart AAMU",offset:20},{label:"Arrive Dean",offset:30},{label:"Depart Dean",offset:35},{label:"Arrive Waterleaf",offset:40},{label:"Depart Waterleaf",offset:45},{label:"Arrive AAMU",offset:60}]}},
-    west_weekend: {label:"West Wknd/Holiday: HSV PL & Elroy", category:"Weekend/Holiday", stops:["Huntsville Place","Elroy"], schedule:{startHour:8, endHour:18, runHours:[8,11,14,16], legs:[
-                      {label:"Depart AAMU",offset:20},{label:"Arrive Huntsville Place",offset:40},{label:"Depart Huntsville Place",offset:45},{label:"Arrive Elroy",offset:50},{label:"Depart Elroy",offset:55},{label:"Arrive AAMU",offset:75}]}},
+    west_weekend: {label:"West Wknd/Holiday: HSV PL & Elroy", category:"Weekend/Holiday", stops:["Huntsville Place","Elroy"], schedule:{startHour:8, endHour:18, runHours:[8,11,15,17], legs:[
+                      {label:"Depart AAMU",offset:20},{label:"Arrive Huntsville Place",offset:35},{label:"Depart Huntsville Place",offset:40},{label:"Arrive Elroy",offset:45},{label:"Depart Elroy",offset:50},{label:"Arrive AAMU",offset:70}]}},
     east_weekend: {label:"East Wknd/Holiday: Waterleaf/Dean", category:"Weekend/Holiday", stops:["Waterleaf","Dean"], schedule:{startHour:8, endHour:18, runHours:[8,11,15,17], legs:[
                       {label:"Depart AAMU",offset:20},{label:"Arrive Waterleaf",offset:30},{label:"Depart Waterleaf",offset:35},{label:"Arrive Dean",offset:40},{label:"Depart Dean",offset:45},{label:"Arrive AAMU",offset:60}]}},
     drake:            {label:"Drake", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
@@ -767,16 +767,34 @@
     });
     return result;
   }
-  function myWeekHtml(){
-    const week = state.msWeekSchedule;
-    if(!week){
-      return `<div style="font-size:11.5px;color:var(--muted);">Week schedule not available right now — check your connection.</div>`;
-    }
+  // Pulls this driver's schedule out of a published (but not-yet-live) future-week
+  // preview, if dispatch has published one. Returns null if nothing's been published.
+  function msFindPreviewWeek(msData, driverName){
+    const preview = msData && msData.publishedPreview;
+    if(!preview || !preview.days) return null;
+    const norm = (s)=>(s||"").trim().toLowerCase();
+    const result = {};
+    MS_DAYS.forEach(day=>{
+      const dayData = preview.days[day];
+      if(!dayData){ result[day] = {date:null, holiday:null, routeName:null, lunch:null}; return; }
+      if(dayData.holiday){ result[day] = {date:dayData.date, holiday:dayData.holiday, routeName:null, lunch:null}; return; }
+      let foundRoute = null;
+      Object.keys(dayData.routes||{}).forEach(routeName=>{
+        const val = dayData.routes[routeName];
+        const names = Array.isArray(val) ? val : [val];
+        if(names.some(v=>norm(v).split('/').includes(norm(driverName)))) foundRoute = routeName;
+      });
+      const lunch = (foundRoute && dayData.lunch && dayData.lunch[foundRoute]) ? dayData.lunch[foundRoute] : null;
+      result[day] = {date:dayData.date, holiday:null, routeName:foundRoute, lunch};
+    });
+    return {weekStart: preview.weekStart, publishedAt: preview.publishedAt, days: result};
+  }
+  function weekGridHtml(week, highlightToday){
     const todayLabel = msGetTodayLabel();
     return `<div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;">
       ${MS_DAYS.map(day=>{
         const info = week[day];
-        const isToday = day===todayLabel;
+        const isToday = highlightToday && day===todayLabel;
         let rightContent;
         if(info.holiday){ rightContent = `<span style="color:#C7973F;font-weight:700;">${info.holiday}</span>`; }
         else if(info.routeName){ rightContent = `<span style="font-weight:700;color:var(--maroon-dark);">${info.routeName}</span>`; }
@@ -788,11 +806,26 @@
           lunchLine = `<div style="font-size:10px;color:var(--muted);margin-top:1px;">Lunch ${fmtClock(mins)}${info.lunch.driver?(' · '+info.lunch.driver):''}</div>`;
         }
         return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:7px 10px;${isToday?'background:#FBF3E1;':''}border-bottom:1px solid var(--line);font-size:12px;">
-          <div style="flex:none;width:76px;"><b>${day}</b><br><span style="font-size:10px;color:var(--muted);">${msFmtShortDate(info.date)}</span></div>
+          <div style="flex:none;width:76px;"><b>${day}</b><br><span style="font-size:10px;color:var(--muted);">${info.date ? msFmtShortDate(info.date) : '—'}</span></div>
           <div style="flex:1;text-align:right;">${rightContent}${lunchLine}</div>
         </div>`;
       }).join('')}
     </div>`;
+  }
+  function myWeekHtml(){
+    const week = state.msWeekSchedule;
+    if(!week){
+      return `<div style="font-size:11.5px;color:var(--muted);">Week schedule not available right now — check your connection.</div>`;
+    }
+    return weekGridHtml(week, true);
+  }
+  function nextWeekPreviewHtml(){
+    const preview = state.msPreviewWeek;
+    if(!preview){
+      return `<div style="font-size:11.5px;color:var(--muted);">Nothing published yet — check back once dispatch has a preview ready.</div>`;
+    }
+    return `<div style="background:#FBF3E1;border:1px solid #C7973F;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:11px;color:#5a4a1f;font-weight:700;text-align:center;">Subject to change — not yet final</div>
+      ${weekGridHtml(preview.days, false)}`;
   }
 
   function blankShift(){ return {pretrip:null, shiftEnded:false, posttrip:null, ridershipSubmitted:false}; }
@@ -836,7 +869,7 @@
     role:null, driverProfile:{}, driverLock:{status:'locked', name:'', vehicle:''}, dispatchPassword:null,
     myTrip:null, myCompletedTrips:[], shiftRoute:null, shiftVehicle:null, shiftCapacity:null,
     selectedRouteChoice:null, pretripAnswers:{}, pretripPhoto:null, pretripFuel:null, posttripFuel:null, postTripAnswers:{}, shiftRecord:null,
-    quickStartChecks:{}, pretripDamage:null, routeGridExpanded:false, myWeekExpanded:false, msWeekSchedule:null, tripVehicleType:null,
+    quickStartChecks:{}, pretripDamage:null, routeGridExpanded:false, myWeekExpanded:false, msWeekSchedule:null, tripVehicleType:null, nextWeekExpanded:false, msPreviewWeek:null,
     pretripMileage:'', pretripExplains:{}, damageExplainText:'',
     stopPhase:'arriving', pendingStop:null, divertedName:'',
     pendingIds:new Set(), changingRoute:false,
@@ -1082,10 +1115,11 @@
     }
     state.pretripAnswers = {}; state.pretripPhoto = null; state.pretripFuel = null; state.posttripFuel = null; state.postTripAnswers = {};
     state.pretripMileage = ''; state.pretripExplains = {}; state.damageExplainText = '';
-    state.quickStartChecks = {}; state.pretripDamage = null; state.tripVehicleType = null; state.routeGridExpanded = false; state.myWeekExpanded = false;
+    state.quickStartChecks = {}; state.pretripDamage = null; state.tripVehicleType = null; state.routeGridExpanded = false; state.myWeekExpanded = false; state.nextWeekExpanded = false;
     const msData = await fetchMasterScheduleData();
     state.msAssignment = msFindAssignment(msData, name);
     state.msWeekSchedule = msFindWeekSchedule(msData, name);
+    state.msPreviewWeek = msFindPreviewWeek(msData, name);
     if(state.msAssignment && !state.selectedRouteChoice) state.selectedRouteChoice = state.msAssignment.routeKey;
     logDriverSignIn(name);
     await renderDriverHome();
@@ -1161,6 +1195,13 @@
           <span id="myweek-chevron" style="font-size:11px;color:var(--muted);">${state.myWeekExpanded ? '▾ Hide' : '▸ Show'}</span>
         </div>
         <div id="myweek-body" style="display:${state.myWeekExpanded?'block':'none'};margin-top:8px;">${myWeekHtml()}</div>
+        ${state.msPreviewWeek ? `
+        <div id="nextweek-toggle" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:11.5px;font-weight:700;color:var(--maroon-dark);text-transform:uppercase;letter-spacing:0.03em;">Next Week (Preview)</span>
+          <span id="nextweek-chevron" style="font-size:11px;color:var(--muted);">${state.nextWeekExpanded ? '▾ Hide' : '▸ Show'}</span>
+        </div>
+        <div id="nextweek-body" style="display:${state.nextWeekExpanded?'block':'none'};margin-top:8px;">${nextWeekPreviewHtml()}</div>
+        ` : ``}
       </div>
       ${asg ? `
       <div style="display:flex;gap:10px;margin-bottom:14px;">
@@ -1376,6 +1417,13 @@
       state.myWeekExpanded = !state.myWeekExpanded;
       renderPretripPage();
     };
+    const nextWeekToggle = document.getElementById("nextweek-toggle");
+    if(nextWeekToggle){
+      nextWeekToggle.onclick = () => {
+        state.nextWeekExpanded = !state.nextWeekExpanded;
+        renderPretripPage();
+      };
+    }
     document.getElementById("begin-route-btn").onclick = async () => { await beginRoute(already, items, isEV, useSectioned, isDiesel); };
   }
 
