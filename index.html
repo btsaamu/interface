@@ -1399,7 +1399,7 @@
       document.getElementById("pt-mileage").oninput = (e) => { state.pretripMileage = e.target.value; if(e.target.value.trim()) e.target.closest(".field-bignum").classList.remove("pt-error-field"); };
       wireFuelChips("pt-fuel-chips", f => { state.pretripFuel = f; });
 
-      if(isEV){
+      if(useSectioned){
         const dynBox = document.getElementById("damage-yn");
         dynBox.querySelectorAll(".pt-btn").forEach(btn=>{
           btn.onclick = () => {
@@ -1436,7 +1436,16 @@
         renderPretripPage();
       };
     }
-    document.getElementById("begin-route-btn").onclick = async () => { await beginRoute(already, items, isEV, useSectioned, isDiesel); };
+    document.getElementById("begin-route-btn").onclick = async (e) => {
+      const btn = e.target;
+      const originalText = btn.textContent;
+      btn.disabled = true; btn.style.opacity = "0.7"; btn.textContent = "STARTING…";
+      try{
+        await beginRoute(already, items, isEV, useSectioned, isDiesel);
+      } finally {
+        if(document.body.contains(btn)){ btn.disabled = false; btn.style.opacity = ""; btn.textContent = originalText; }
+      }
+    };
   }
 
   async function beginRoute(already, items, isEV, useSectioned, isDiesel){
@@ -1496,11 +1505,22 @@
 
       const itemsOk = !items.some((_,i)=> !state.pretripAnswers[i] || (state.pretripAnswers[i]==='bad' && !document.getElementById("ptx-explain-"+i).value.trim()));
       if(!mileage || !state.pretripFuel || !itemsOk || !quickStartOk || !damageOk){
+        const missing = [];
+        if(!mileage) missing.push(isEV||isDiesel ? "beginning odometer" : "starting mileage");
+        if(!state.pretripFuel) missing.push(isEV ? "beginning charge level" : "starting fuel level");
+        if(!quickStartOk) missing.push("Quick Start Procedure steps");
+        if(!damageOk) missing.push("damage report (Yes/No, and an explanation if Yes)");
+        if(!itemsOk) missing.push("checklist item(s) below — including an explanation for anything marked Bad");
+        alert("Please complete before you can begin your route:\n\n• " + missing.join("\n• "));
         if(firstError) firstError.scrollIntoView({behavior:"smooth", block:"center"});
         return;
       }
     }
     if(!state.selectedRouteChoice || !vehicle){
+      const missing = [];
+      if(!state.selectedRouteChoice) missing.push("a route");
+      if(!vehicle) missing.push("a vehicle");
+      alert("Please select " + missing.join(" and ") + " before you can begin your route.");
       if(firstError) firstError.scrollIntoView({behavior:"smooth", block:"center"});
       return;
     }
@@ -1516,11 +1536,19 @@
         pretripRecord.damage = {reported: state.pretripDamage==='yes', explain: state.pretripDamage==='yes' ? (document.getElementById("damage-explain").value||"").trim() : ""};
       }
       currentShift().pretrip = pretripRecord;
-      await saveShiftRecord(state.driverLock.name, state.shiftRecord);
+      state.shiftRoute = state.selectedRouteChoice; state.shiftVehicle = vehicle; state.shiftCapacity = capacity;
+      await Promise.all([
+        saveShiftRecord(state.driverLock.name, state.shiftRecord),
+        setVehicleCapacity(vehicle, capacity),
+        saveDriverProfile({name: state.driverLock.name, vehicle})
+      ]);
+    } else {
+      state.shiftRoute = state.selectedRouteChoice; state.shiftVehicle = vehicle; state.shiftCapacity = capacity;
+      await Promise.all([
+        setVehicleCapacity(vehicle, capacity),
+        saveDriverProfile({name: state.driverLock.name, vehicle})
+      ]);
     }
-    state.shiftRoute = state.selectedRouteChoice; state.shiftVehicle = vehicle; state.shiftCapacity = capacity;
-    await setVehicleCapacity(vehicle, capacity);
-    await saveDriverProfile({name: state.driverLock.name, vehicle});
     await startTripInternal();
   }
 
