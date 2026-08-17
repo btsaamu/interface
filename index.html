@@ -204,6 +204,7 @@
   .route-row-grid{display:grid;gap:10px;margin-bottom:14px;}
   .route-row-grid-3{grid-template-columns:repeat(3,1fr);}
   .route-row-grid-2{grid-template-columns:repeat(2,1fr);}
+  .route-row-grid-1{grid-template-columns:1fr;max-width:calc(33.33% - 7px);}
   .route-box{background:white;border:1px solid var(--line);border-radius:10px;padding:12px;position:relative;}
   .route-box-overflow{background:#FCEAE6;border-color:var(--alert-red);}
   .route-box-badge{position:absolute;top:10px;right:10px;background:var(--alert-red);color:white;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;}
@@ -328,6 +329,7 @@
     drake:            {label:"Drake", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
     bulldog:          {label:"Bulldog", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
     normal_hills:     {label:"Normal Hills", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
+    floater:          {label:"Floater", category:"Day", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
     paratransit:      {label:"Paratransit", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
     paratransit_night:{label:"Paratransit Night", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:18, endHour:22, legs:[{label:"Depart AAMU",offset:0}]}},
     trips:            {label:"Trips", category:"On-Campus", simplified:true, dualVehicle:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}}
@@ -649,6 +651,7 @@
     "East Nights": "east_night", "West Nights": "west_night",
     "East WKND": "east_weekend", "West WKND": "west_weekend",
     "Drake": "drake", "Bulldog 1": "bulldog", "Normal Hills": "normal_hills",
+    "Floater": "floater",
     "Paratransit": "paratransit", "Paratransit Night": "paratransit_night"
   };
   const MS_DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -1162,7 +1165,7 @@
     const isTrips = !!(routeDef && routeDef.dualVehicle);
     const tripIsEVVehicle = isTrips && EV_VEHICLES.some(v=>v.name===state.tripVehicleType);
     const tripIsDieselVehicle = isTrips && TRIPS_DIESEL_VEHICLES.includes(state.tripVehicleType);
-    const isEV = (!!(routeDef && routeDef.simplified) && !isTrips) || tripIsEVVehicle;
+    const isEV = (!!(routeDef && routeDef.simplified) && routeDef.category==="On-Campus" && !isTrips) || tripIsEVVehicle;
     const isDiesel = tripIsDieselVehicle;
     const isVan = isTrips && state.tripVehicleType === 'Van';
     const useSectioned = isEV || isDiesel;
@@ -2037,7 +2040,7 @@
     const isTrips = !!(routeDef && routeDef.dualVehicle);
     const tripIsEVVehicle = isTrips && lastTrip && EV_VEHICLES.some(v=>v.name===lastTrip.vehicleType);
     const tripIsDieselVehicle = isTrips && lastTrip && TRIPS_DIESEL_VEHICLES.includes(lastTrip.vehicleType);
-    const isEV = (!!(routeDef && routeDef.simplified) && !isTrips) || tripIsEVVehicle;
+    const isEV = (!!(routeDef && routeDef.simplified) && routeDef.category==="On-Campus" && !isTrips) || tripIsEVVehicle;
     const isDiesel = tripIsDieselVehicle;
     const useSectioned = isEV || isDiesel;
     const showTotalPassengers = !!(routeDef && routeDef.simplified);
@@ -2379,13 +2382,15 @@
   const ROUTE_BOX_LABEL = {
     dean:"Dean", waterleaf:"Waterleaf", elroy:"Elroy", hsv_elroy:"HSV PL/Elroy",
     east_night:"East Night", west_night:"West Night",
-    east_weekend:"East Wknd/Holiday", west_weekend:"West Wknd/Holiday"
+    east_weekend:"East Wknd/Holiday", west_weekend:"West Wknd/Holiday",
+    floater:"Floater"
   };
   const ROUTE_BOX_ROWS = [
     {label:"East", keys:["dean","waterleaf"]},
     {label:"West", keys:["elroy","hsv_elroy"]},
     {label:"Nights", keys:["east_night","west_night"]},
-    {label:"Weekend/Holiday", keys:["east_weekend","west_weekend"]}
+    {label:"Weekend/Holiday", keys:["east_weekend","west_weekend"]},
+    {label:"Floater", keys:["floater"]}
   ];
   function computeRouteSummary(routeKey, trips){
     const routeTrips = trips.filter(t=>t.route===routeKey);
