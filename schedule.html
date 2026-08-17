@@ -454,6 +454,12 @@ function migrateData(d){
     const deanIdx = d.routes.findIndex(r=>r.name==="Dean");
     d.routes.splice(deanIdx>=0 ? deanIdx : d.routes.length, 0, fresh);
   }
+  // Floater: added after some schedules were already saved — inject it if missing.
+  if(!d.routes.some(r=>r.name==="Floater")){
+    const fresh = JSON.parse(JSON.stringify(DEFAULT_DATA.routes.find(r=>r.name==="Floater")));
+    const elroyIdx = d.routes.findIndex(r=>r.name==="Elroy");
+    d.routes.splice(elroyIdx>=0 ? elroyIdx : d.routes.length, 0, fresh);
+  }
   d.routes.forEach(r=>{
     if(r.days) Object.keys(r.days).forEach(day=>{ r.days[day] = renameDriverString(r.days[day]); });
     if(r.shifts2) Object.values(r.shifts2).forEach(arr=>arr.forEach(s=>{ s.driver = renameDriverString(s.driver); }));
