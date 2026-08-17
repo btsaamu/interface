@@ -107,29 +107,29 @@
   .trip-item, .callout-item{padding:8px 10px;border-radius:5px;background:#F3EEE6;margin-bottom:6px;font-size:12px;}
   .trip-item b, .callout-item b{color:var(--maroon-dark);}  #printArea{display:none;}
   @media print{
-    @page{ size: landscape; margin: 0.4in; }
-    body *{ visibility:hidden; }
-    #printArea, #printArea *{ visibility:visible; }
-    #printArea{ display:block; position:absolute; top:0; left:0; width:100%; }
-    .p-header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:4px solid #6E1E2C;padding-bottom:10px;margin-bottom:14px;}
-    .p-header h1{font-size:30px;margin:0;color:#6E1E2C;font-weight:800;letter-spacing:0.02em;font-family:Arial,Helvetica,sans-serif;}
-    .p-header .p-sub{font-size:17px;color:#55504A;margin-top:4px;font-family:Arial,Helvetica,sans-serif;}
-    .p-subject-change{background:#C7973F;color:#4A1420;font-weight:800;font-size:15px;padding:6px 16px;border-radius:6px;letter-spacing:0.03em;font-family:Arial,Helvetica,sans-serif;}
-    .p-table{width:100%;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;}
-    .p-table th{background:#F3EEE6;font-size:13px;text-transform:uppercase;letter-spacing:0.03em;color:#6E1E2C;padding:8px 6px;text-align:left;border:2px solid #221B1A;}
-    .p-table td{padding:9px 6px;border:2px solid #221B1A;font-size:18px;font-weight:700;font-family:Arial,Helvetica,sans-serif;vertical-align:top;}
-    .p-table td.p-route{background:#FBF7F0;font-size:16px;color:#4A1420;}
-    .p-table td.p-route .p-veh{display:block;font-size:11px;font-weight:400;color:#8a7d76;}
+    @page{ size: landscape; margin: 0.25in; }
+    header, .wrap{ display:none !important; }
+    #printArea{ display:block !important; }
+    .p-header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #6E1E2C;padding-bottom:4px;margin-bottom:6px;}
+    .p-header h1{font-size:19px;margin:0;color:#6E1E2C;font-weight:800;letter-spacing:0.02em;font-family:Arial,Helvetica,sans-serif;}
+    .p-header .p-sub{font-size:11px;color:#55504A;margin-top:2px;font-family:Arial,Helvetica,sans-serif;}
+    .p-subject-change{background:#C7973F;color:#4A1420;font-weight:800;font-size:10px;padding:3px 10px;border-radius:5px;letter-spacing:0.03em;font-family:Arial,Helvetica,sans-serif;}
+    .p-table{width:100%;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;table-layout:fixed;}
+    .p-table th{background:#F3EEE6;font-size:9px;text-transform:uppercase;letter-spacing:0.03em;color:#6E1E2C;padding:3px 4px;text-align:left;border:1.5px solid #221B1A;}
+    .p-table td{padding:3px 4px;border:1.5px solid #221B1A;font-size:12px;font-weight:700;font-family:Arial,Helvetica,sans-serif;vertical-align:top;line-height:1.15;page-break-inside:avoid;}
+    .p-table tr{page-break-inside:avoid;}
+    .p-table td.p-route{background:#FBF7F0;font-size:11px;color:#4A1420;}
+    .p-table td.p-route .p-veh{display:block;font-size:7.5px;font-weight:400;color:#8a7d76;}
     .p-table td.p-unassigned{color:#A63A2E;font-weight:800;}
     .p-table td.p-dash{color:#c8beb2;font-weight:400;}
-    .p-table-daily td{font-size:19px;}
-    .p-table td.p-lunch{font-size:15px;}
-    .p-table td.p-lunch .p-time{font-weight:800;font-size:16px;display:block;}
-    .p-table td.p-lunch .p-relief{display:block;font-size:18px;font-weight:800;color:#221B1A;margin-top:3px;}
-    .p-table td.p-lunch .p-relief .p-lbl{font-size:11px;font-weight:400;color:#8a7d76;text-transform:uppercase;letter-spacing:0.03em;display:block;}
-    .p-table td.p-lunch .p-relief-missing{color:#A63A2E;font-weight:700;font-size:14px;}
-    .p-table td.p-lunch .p-none{color:#8a7d76;font-weight:400;font-size:13px;}
-    .p-section-label{margin-top:18px;font-size:14px;text-transform:uppercase;letter-spacing:0.03em;color:#6E1E2C;font-weight:800;border-bottom:2px solid #6E1E2C;padding-bottom:4px;font-family:Arial,Helvetica,sans-serif;}
+    .p-table-daily td{font-size:14px;}
+    .p-table td.p-lunch{font-size:11px;}
+    .p-table td.p-lunch .p-time{font-weight:800;font-size:12px;display:block;}
+    .p-table td.p-lunch .p-relief{display:block;font-size:14px;font-weight:800;color:#221B1A;margin-top:1px;}
+    .p-table td.p-lunch .p-relief .p-lbl{font-size:8.5px;font-weight:400;color:#8a7d76;text-transform:uppercase;letter-spacing:0.03em;display:block;}
+    .p-table td.p-lunch .p-relief-missing{color:#A63A2E;font-weight:700;font-size:10px;}
+    .p-table td.p-lunch .p-none{color:#8a7d76;font-weight:400;font-size:9.5px;}
+    .p-section-label{margin-top:8px;font-size:10px;text-transform:uppercase;letter-spacing:0.03em;color:#6E1E2C;font-weight:800;border-bottom:1.5px solid #6E1E2C;padding-bottom:2px;font-family:Arial,Helvetica,sans-serif;}
   }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -248,6 +248,7 @@ const DRIVER_APP_ROUTE_KEY = {
   "Drake": "drake",
   "Bulldog 1": "bulldog",
   "Normal Hills": "normal_hills",
+  "Floater": "floater",
   "Paratransit": "paratransit",
   "Paratransit Night": "paratransit_night"
 };
@@ -285,9 +286,9 @@ async function fetchLiveRidershipToday(){
 
 const DEFAULT_DATA = {
   routes: [
-    {name:"Drake", cat:"On-Campus", vehicle:"AL-1", cdl:true, start:"7:00",end:"18:00",
+    {name:"Drake", cat:"On-Campus", vehicle:"AL-1", cdl:true, start:"7:00",end:"18:00", splitEligible:true,
      days:{Mon:"Les",Tue:"Johnny",Wed:"Johnny",Thu:"Sullivan",Fri:"Sullivan"}},
-    {name:"Bulldog 1", cat:"On-Campus", vehicle:"AL-5 / 799", cdl:true, start:"7:00",end:"18:00",
+    {name:"Bulldog 1", cat:"On-Campus", vehicle:"AL-5 / 799", cdl:true, start:"7:00",end:"18:00", splitEligible:true,
      days:{Mon:"Brandi"},
      shifts2:{
        Tue:[{start:"7:00",end:"12:00",driver:"Kevin"},{start:"12:00",end:"18:00",driver:"Patricia H"}],
@@ -295,10 +296,12 @@ const DEFAULT_DATA = {
        Thu:[{start:"7:00",end:"12:00",driver:"Kevin"},{start:"12:00",end:"18:00",driver:"Patricia H"}],
        Fri:[{start:"7:00",end:"12:00",driver:"Kevin"},{start:"12:00",end:"18:00",driver:"Patricia H"}]
      }},
-    {name:"Paratransit", cat:"On-Campus", vehicle:"AL-2", cdl:true, start:"7:00",end:"18:00",
+    {name:"Paratransit", cat:"On-Campus", vehicle:"AL-2", cdl:true, start:"7:00",end:"18:00", splitEligible:true,
      days:{Mon:"Samantha",Tue:"Samantha",Wed:"UNASSIGNED",Thu:"Charles",Fri:"Charles"}},
-    {name:"Normal Hills", cat:"On-Campus", vehicle:"Mini EV", cdl:true, start:"7:00",end:"18:00",
+    {name:"Normal Hills", cat:"On-Campus", vehicle:"Mini EV", cdl:true, start:"7:00",end:"18:00", splitEligible:true,
      days:{Mon:"Sylvester",Tue:"Sylvester",Wed:"Ola",Thu:"Sylvester",Fri:"Sylvester"}},
+    {name:"Floater", cat:"Off-Campus", vehicle:"Varies", cdl:false, start:"7:00",end:"18:00", splitEligible:true,
+     days:{Mon:"UNASSIGNED",Tue:"UNASSIGNED",Wed:"UNASSIGNED",Thu:"UNASSIGNED",Fri:"UNASSIGNED"}},
     {name:"Elroy", cat:"Off-Campus", vehicle:"Elroy Shuttle", cdl:false, start:"7:00",end:"18:00",
      days:{Mon:"Carla",Tue:"Les",Wed:"Carla",Thu:"Carla",Fri:"Carla"}},
     {name:"Huntsville Place/Elroy", cat:"Off-Campus", vehicle:"HSV PL/Elroy Shuttle", cdl:false, start:"7:00",end:"18:00",
@@ -428,6 +431,13 @@ function migrateData(d){
     if(r.name==="Bulldog 1" && !r.shifts2) return false;
     return true;
   });
+  // Clean up stale data from a fixed bug: a day promoted to split-shift could be left with
+  // BOTH a shifts2 entry and its old single-shift entry, double-counting that day's hours.
+  d.routes.forEach(r=>{
+    if(r.shifts2 && r.days){
+      Object.keys(r.shifts2).forEach(day=>{ if(r.days[day]!==undefined) delete r.days[day]; });
+    }
+  });
   if(!d.routes.some(r=>r.name==="Bulldog 1")){
     const fresh = JSON.parse(JSON.stringify(DEFAULT_DATA.routes.find(r=>r.name==="Bulldog 1")));
     d.routes.splice(1, 0, fresh);
@@ -501,7 +511,17 @@ function printCellHtml(val){
   return `<td>${val}</td>`;
 }
 function printRouteRowCells(r, days){
+  const isWeekendRoute = (r.name==="East WKND" || r.name==="West WKND");
   return days.map(d=>{
+    const dateISO = WEEK[d];
+    const holiday = DATA.holidays[dateISO];
+    if(holiday){
+      if(isWeekendRoute){
+        const val = (holiday.assignments && holiday.assignments[r.name]) || "UNASSIGNED";
+        return printCellHtml(val);
+      }
+      return `<td class="p-dash">${holiday.type}</td>`;
+    }
     if(r.shifts2 && r.shifts2[d]){
       const names = r.shifts2[d].map(s=> s.driver==='UNASSIGNED' ? '<span class="p-unassigned">UNASSIGNED</span>' : s.driver).join(' / ');
       return `<td>${names}</td>`;
@@ -682,6 +702,7 @@ function getDriverHours(){
   DATA.routes.forEach(r=>{
     const shiftMin = toMin(r.end) - toMin(r.start);
     Object.keys(r.days).forEach(day=>{
+      if(r.shifts2 && r.shifts2[day]) return; // shifts2 takes precedence for this day — avoids double-counting stale data
       const val = r.days[day];
       if(!val || val==="UNASSIGNED" || val==="N/A") return;
       let mins = shiftMin;
@@ -1489,11 +1510,11 @@ function renderWeek(){
         html += `<td>` + r.shifts2[d].map((s,si)=>{
           const val = s.driver==="UNASSIGNED" ? "" : s.driver;
           return `<select data-ri="${ri}" data-day="${d}" data-shift="${si}" style="margin-bottom:3px;">${driverOptionsHTML(val)}</select>`;
-        }).join('') + (r.cat==="On-Campus" ? `<button class="linkbtn-sm" data-merge-shift="${ri}" data-merge-day="${d}">Merge to one shift</button>` : ``) + `</td>`;
+        }).join('') + (r.splitEligible ? `<button class="linkbtn-sm" data-merge-shift="${ri}" data-merge-day="${d}">Merge to one shift</button>` : ``) + `</td>`;
       } else if(r.days[d]===undefined){ html += `<td class="muted">—</td>`; }
       else {
         const val = r.days[d]==="UNASSIGNED" ? "" : r.days[d];
-        html += `<td><select data-ri="${ri}" data-day="${d}">${driverOptionsHTML(val)}</select>` + (r.cat==="On-Campus" ? `<button class="linkbtn-sm" data-split-shift="${ri}" data-split-day="${d}">+ Split shift (7&ndash;12 / 11:30&ndash;6)</button>` : ``) + `</td>`;
+        html += `<td><select data-ri="${ri}" data-day="${d}">${driverOptionsHTML(val)}</select>` + (r.splitEligible ? `<button class="linkbtn-sm" data-split-shift="${ri}" data-split-day="${d}">+ Split shift (7&ndash;12 / 11:30&ndash;6)</button>` : ``) + `</td>`;
       }
     });
     html += `<td>
@@ -1691,14 +1712,14 @@ function renderWeek(){
         phtml += `<td>` + vals.map((val,si)=>{
           const shown = val==="UNASSIGNED" ? "" : val;
           return `<select data-plan-split-ri="${ri}" data-plan-split-day="${d}" data-plan-split-idx="${si}" style="margin-bottom:3px;${isOverride?'border-color:#C7973F;border-width:2px;':''}">${driverOptionsHTML(shown)}</select>`;
-        }).join('') + (r.cat==="On-Campus" ? `<button class="linkbtn-sm" data-plan-merge-ri="${ri}" data-plan-merge-day="${d}">Merge to one shift</button>` : ``) + `</td>`;
+        }).join('') + (r.splitEligible ? `<button class="linkbtn-sm" data-plan-merge-ri="${ri}" data-plan-merge-day="${d}">Merge to one shift</button>` : ``) + `</td>`;
       } else if(r.days[d]===undefined && !(r.shifts2 && r.shifts2[d])){
         phtml += `<td class="muted">—</td>`;
       } else {
         const val = ov !== undefined ? ov : r.days[d];
         const shown = (!val || val==="UNASSIGNED") ? "" : val;
         const isOverride = ov !== undefined;
-        phtml += `<td><select data-ri="${ri}" data-day="${d}" style="${isOverride?'border-color:#C7973F;border-width:2px;':''}">${driverOptionsHTML(shown)}</select>` + (r.cat==="On-Campus" ? `<button class="linkbtn-sm" data-plan-split-btn-ri="${ri}" data-plan-split-btn-day="${d}">+ Split shift (7&ndash;12 / 11:30&ndash;6)</button>` : ``) + `</td>`;
+        phtml += `<td><select data-ri="${ri}" data-day="${d}" style="${isOverride?'border-color:#C7973F;border-width:2px;':''}">${driverOptionsHTML(shown)}</select>` + (r.splitEligible ? `<button class="linkbtn-sm" data-plan-split-btn-ri="${ri}" data-plan-split-btn-day="${d}">+ Split shift (7&ndash;12 / 11:30&ndash;6)</button>` : ``) + `</td>`;
       }
     });
     phtml += `<td>
@@ -1847,6 +1868,7 @@ function renderWeek(){
                 {start:"11:30", end:"18:00", driver: val[1]}
               ];
             }
+            if(r.days[d]!==undefined) delete r.days[d];
           } else {
             if(r.shifts2 && r.shifts2[d]) delete r.shifts2[d];
             if(r.days[d]!==undefined) r.days[d] = val;
