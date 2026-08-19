@@ -588,6 +588,22 @@
   }
   function todayDisplay(){ return new Date().toLocaleDateString([], {month:"short", day:"numeric", year:"numeric"}); }
   function nowTime(){ return new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}); }
+  // Keeps a time-entry field ticking with the current time while the driver's layover
+  // runs long, instead of freezing at whatever moment the screen first rendered. Stops
+  // the instant the driver types into it themselves, so a manual correction sticks.
+  let liveClockHandle = null;
+  function startLiveClock(inputId){
+    if(liveClockHandle) clearInterval(liveClockHandle);
+    const input = document.getElementById(inputId);
+    if(!input) return;
+    input.dataset.liveClock = "on";
+    input.addEventListener("input", () => { input.dataset.liveClock = "off"; }, {once:true});
+    liveClockHandle = setInterval(() => {
+      const el = document.getElementById(inputId);
+      if(!el || el.dataset.liveClock !== "on"){ clearInterval(liveClockHandle); liveClockHandle = null; return; }
+      el.value = nowTime();
+    }, 1000);
+  }
   function fmtSysTime(iso){ if(!iso) return ""; return new Date(iso).toLocaleTimeString([], {hour:"numeric", minute:"2-digit", second:"2-digit"}); }
   function fmtGeoShort(lat,lng,gpsError){ if(lat==null||lng==null) return `no GPS${gpsError?` (${gpsError})`:''}`; return `${lat.toFixed(4)}, ${lng.toFixed(4)}`; }
   function dayStorageKey(){ return "bts-day-"+todayKey(); }
@@ -1779,6 +1795,10 @@
               </div>
             </div>
           </div>
+          <div class="field" style="margin-bottom:10px;">
+            <label style="font-size:10.5px;color:var(--muted);display:block;margin-bottom:4px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;">Note (optional)</label>
+            <input type="text" id="campus-depart-note" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:white;" placeholder="e.g. running late — traffic on University Dr">
+          </div>
           <button class="btn btn-primary big-log-btn" id="log-campus-depart-btn">LOG DEPARTURE &amp; CONTINUE</button>
           ${showNoPax ? `<button class="btn btn-outline big-log-btn" id="no-passengers-btn" style="margin-top:8px;">NO PASSENGERS — NOT LEAVING CAMPUS</button>` : ''}
         </div>
@@ -1844,6 +1864,10 @@
             </div>
           </div>
         </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label style="font-size:10.5px;color:var(--muted);display:block;margin-bottom:4px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;">Note (optional)</label>
+          <input type="text" id="stop-depart-note" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:white;" placeholder="e.g. running late — traffic on University Dr">
+        </div>
         <button class="btn btn-primary big-log-btn" id="log-departure-btn">LOG DEPARTURE &amp; CONTINUE</button>
       </div>
     `;
@@ -1852,6 +1876,7 @@
   function wireStopPhase(trip, defaultStopName, cap, route){
     if(state.stopPhase === 'depart_campus'){
       document.getElementById("fill-now-campus").onclick = () => { document.getElementById("campus-time-input").value = nowTime(); };
+      startLiveClock("campus-time-input");
       ["going","coming"].forEach(kind=>{
         const box = document.getElementById("stepper-"+kind);
         box.querySelectorAll("button").forEach(btn=>{
@@ -1891,6 +1916,7 @@
         trip.departAAMU = time;
         trip.departMeta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
         trip.departGoing = going; trip.departComing = coming; trip.departLeftBehind = leftBehind; trip.departOverflow = overflow; trip.departAcknowledged = false;
+        trip.departNote = (document.getElementById("campus-depart-note").value||"").trim();
         await syncTrip(trip);
         state.stopPhase = 'arriving';
         renderLogPage();
@@ -1917,6 +1943,7 @@
     }
     if(state.stopPhase === 'arrive_campus'){
       document.getElementById("fill-now-campus").onclick = () => { document.getElementById("campus-time-input").value = nowTime(); };
+      startLiveClock("campus-time-input");
       document.getElementById("log-campus-arrive-btn").onclick = async () => {
         const time = document.getElementById("campus-time-input").value;
         const geo = await getGeo();
@@ -1937,6 +1964,7 @@
         if(box.style.display==='block') document.getElementById("diff-loc-input").focus();
       };
       document.getElementById("fill-now-arrive").onclick = () => { document.getElementById("arrive-time-input").value = nowTime(); };
+      startLiveClock("arrive-time-input");
       document.getElementById("log-arrival-btn").onclick = async () => {
         const diffInput = document.getElementById("diff-loc-input");
         state.divertedName = diffInput ? diffInput.value.trim() : '';
@@ -1950,6 +1978,7 @@
       return;
     }
     document.getElementById("fill-now-depart").onclick = () => { document.getElementById("depart-time-input").value = nowTime(); };
+    startLiveClock("depart-time-input");
     document.getElementById("diff-loc-btn-depart").onclick = () => {
       const box = document.getElementById("diff-loc-box-depart");
       box.style.display = box.style.display==='none' ? 'block' : 'none';
@@ -1999,6 +2028,7 @@
         name: finalName, diverted: state.pendingStop.diverted || !!state.divertedName,
         arrive: state.pendingStop.arrive, arriveMeta: state.pendingStop.arriveMeta,
         depart, departMeta, going, coming, leftBehind, overflow, acknowledged:false,
+        note: (document.getElementById("stop-depart-note").value||"").trim(),
         systemTimestamp: state.pendingStop.arriveMeta.timestamp
       };
       trip.stops.push(stopRecord);
@@ -2043,6 +2073,8 @@
     const isEV = (!!(routeDef && routeDef.simplified) && routeDef.category==="On-Campus" && !isTrips) || tripIsEVVehicle;
     const isDiesel = tripIsDieselVehicle;
     const useSectioned = isEV || isDiesel;
+    const showEndingMileage = isEV || !useSectioned;
+    const endingMileageLabel = isEV ? 'Ending Odometer' : 'Ending Mileage';
     const showTotalPassengers = !!(routeDef && routeDef.simplified);
     const items = isDiesel ? DIESEL_POSTTRIP_ITEMS : (isEV ? EV_POSTTRIP_ITEMS : POSTTRIP_ITEMS);
     driverView.innerHTML = `
@@ -2050,7 +2082,7 @@
         <div class="card-label">Post-Trip Inspection</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Please answer each question before submitting.</div>
         ${showTotalPassengers ? `<div class="field-bignum"><label>Total Passengers This Shift</label><input id="pp-total-passengers" type="number" min="0" inputmode="numeric" placeholder="0"></div>` : ``}
-        ${isEV ? `<div class="field-bignum"><label>Ending Odometer</label><input id="pp-mileage" type="number" min="0" inputmode="numeric" placeholder="0"></div>` : ``}
+        ${showEndingMileage ? `<div class="field-bignum"><label>${endingMileageLabel}</label><input id="pp-mileage" type="number" min="0" inputmode="numeric" placeholder="0"></div>` : ``}
         <div class="pt-item">
           <div class="pt-item-label">Ending ${isEV?'Charge':'Fuel'} Level</div>
           ${isEV ? chargeChipsHtml("pp-fuel-chips", state.posttripFuel) : fuelChipsHtml("pp-fuel-chips", state.posttripFuel)}
@@ -2089,12 +2121,12 @@
       const totalInput = document.getElementById("pp-total-passengers");
       const missingTotal = showTotalPassengers && (!totalInput || !totalInput.value.trim());
       const mileageInput = document.getElementById("pp-mileage");
-      const missingMileage = isEV && (!mileageInput || !mileageInput.value.trim());
+      const missingMileage = showEndingMileage && (!mileageInput || !mileageInput.value.trim());
       if(missingFuel) document.getElementById("pp-fuel-chips").classList.add("pt-error-field");
       if(missingTotal) totalInput.closest(".field-bignum").classList.add("pt-error-field");
       if(missingMileage) mileageInput.closest(".field-bignum").classList.add("pt-error-field");
       if(missingQuestions || missingFuel || missingTotal || missingMileage){
-        alert(`Please complete every item — including ${isEV?'ending odometer and charge level':'fuel level'}${showTotalPassengers?' and total passengers':''} — before submitting.`);
+        alert(`Please complete every item — including ${showEndingMileage?(endingMileageLabel.toLowerCase()+' and '):''}${isEV?'charge level':'fuel level'}${showTotalPassengers?' and total passengers':''} — before submitting.`);
         if(missingMileage) mileageInput.scrollIntoView({behavior:"smooth", block:"center"});
         else if(missingTotal) totalInput.scrollIntoView({behavior:"smooth", block:"center"});
         else if(missingFuel) document.getElementById("pp-fuel-chips").scrollIntoView({behavior:"smooth", block:"center"});
@@ -2102,7 +2134,7 @@
       }
       const answers = items.map((q,i)=>({question:q, answer:state.postTripAnswers[i], note: state.postTripAnswers[i]==='yes' ? (document.getElementById("pp-explain-"+i).value||"") : ""}));
       currentShift().posttrip = {done:true, answers, endingFuel:state.posttripFuel, completedAt:new Date().toISOString()};
-      if(isEV) currentShift().posttrip.endingMileage = mileageInput.value.trim();
+      if(showEndingMileage) currentShift().posttrip.endingMileage = mileageInput.value.trim();
       if(showTotalPassengers) currentShift().posttrip.totalPassengers = parseInt(totalInput.value,10) || 0;
       await saveShiftRecord(state.driverLock.name, state.shiftRecord);
       renderDaySummaryPage();
@@ -2402,14 +2434,14 @@
       if(t.departAAMU && t.departMeta){
         going += t.departGoing||0; coming += t.departComing||0;
         if(t.departOverflow && !t.departAcknowledged) hasOverflow = true;
-        events.push({ts:t.departMeta.timestamp, time:t.departAAMU, location:"Depart AAMU", going:t.departGoing, coming:t.departComing});
+        events.push({ts:t.departMeta.timestamp, time:t.departAAMU, location:"Depart AAMU", going:t.departGoing, coming:t.departComing, note:t.departNote});
         if(!latestTs || new Date(t.departMeta.timestamp) > new Date(latestTs)){ latestTs = t.departMeta.timestamp; latestDriver = t.driver; }
       }
       t.stops.forEach(s=>{
         going += s.going||0; coming += s.coming||0;
         if(s.overflow && !s.acknowledged) hasOverflow = true;
         if(s.depart){
-          events.push({ts:s.systemTimestamp, time:s.depart, location:s.name, going:s.going, coming:s.coming});
+          events.push({ts:s.systemTimestamp, time:s.depart, location:s.name, going:s.going, coming:s.coming, note:s.note});
         }
         if(!latestTs || new Date(s.systemTimestamp) > new Date(latestTs)){ latestTs = s.systemTimestamp; latestDriver = t.driver; }
       });
@@ -2434,6 +2466,7 @@
                 <div class="route-box-feed-time">${e.time}</div>
                 <div>${e.location}</div>
                 <div>${fmtCounts(e.going,e.coming)||'—'}</div>
+                ${e.note ? `<div style="font-size:10.5px;color:var(--warn-orange);font-style:italic;margin-top:2px;">"${e.note}"</div>` : ``}
               </div>
             `).join("")}
           ${s.events.length>2 ? `<div class="route-box-expand" data-expand="${routeKey}">${expanded?'Show less':'Show more'}</div>` : ''}
@@ -2465,7 +2498,22 @@
           rows.push(`<tr><td class="mono">${fmtSysTime(t.arriveMeta.timestamp)}</td><td colspan="2">Arrive AAMU: ${t.arriveAAMU}</td><td>${routeShort(t.route)}</td><td>${t.driver}</td><td>AAMU</td><td>—</td><td>—</td><td>—</td><td>${t.vehicleCapacity||DEFAULT_CAPACITY}</td><td>${fmtGeo(t.arriveMeta.lat,t.arriveMeta.lng,t.arriveMeta.gpsError)}</td><td>${editable?`<button class="link-btn" data-edit-trip="${t.id}" data-edit-field="arrive">Edit</button>`:'—'}</td></tr>`);
         }
       }
-      t.stops.slice().reverse().forEach(s=>{
+      t.stops.slice().reverse().forEach((s,ri)=>{
+        const si = t.stops.length - 1 - ri;
+        if(editable && state.editingRow === t.id+':stop:'+si){
+          rows.push(`<tr><td colspan="12"><div class="edit-form">
+            <strong style="margin-right:6px;">${s.name} —</strong>
+            <label style="font-size:11px;">Going</label>
+            <input type="number" min="0" id="edit-stop-going-${t.id}-${si}" value="${s.going||0}">
+            <label style="font-size:11px;">Coming</label>
+            <input type="number" min="0" id="edit-stop-coming-${t.id}-${si}" value="${s.coming||0}">
+            <label style="font-size:11px;">Left Behind</label>
+            <input type="number" min="0" id="edit-stop-leftbehind-${t.id}-${si}" value="${s.leftBehind||0}">
+            <button class="link-btn" data-save-trip="${t.id}" data-save-field="stop:${si}">Save</button>
+            <button class="link-btn danger" data-cancel-edit="1">Cancel</button>
+          </div></td></tr>`);
+          return;
+        }
         rows.push(`
         <tr class="${s.overflow?'overflow':''}">
           <td class="mono">${fmtSysTime(s.systemTimestamp)}</td>
@@ -2476,7 +2524,7 @@
           <td>${s.going}</td><td>${s.coming}</td><td>${s.leftBehind==null?'—':s.leftBehind}</td>
           <td>${t.vehicleCapacity||DEFAULT_CAPACITY}</td>
           <td>${fmtGeo(s.lat||s.arriveMeta&&s.arriveMeta.lat, s.lng||s.arriveMeta&&s.arriveMeta.lng, s.gpsError)}</td>
-          <td>${s.overflow ? '<span class="tag over">Overflow</span>' : '<span class="tag ok">OK</span>'}</td>
+          <td>${s.overflow ? '<span class="tag over">Overflow</span>' : '<span class="tag ok">OK</span>'} ${editable?`<button class="link-btn" data-edit-trip="${t.id}" data-edit-field="stop:${si}">Edit</button>`:''}</td>
         </tr>
       `);
       });
@@ -2490,6 +2538,8 @@
             <input type="number" min="0" id="edit-depart-going-${t.id}" value="${t.departGoing||0}">
             <label style="font-size:11px;">Coming</label>
             <input type="number" min="0" id="edit-depart-coming-${t.id}" value="${t.departComing||0}">
+            <label style="font-size:11px;">Left Behind</label>
+            <input type="number" min="0" id="edit-depart-leftbehind-${t.id}" value="${t.departLeftBehind||0}">
             <button class="link-btn" data-save-trip="${t.id}" data-save-field="depart">Save</button>
             <button class="link-btn danger" data-cancel-edit="1">Cancel</button>
           </div></td></tr>`);
@@ -2946,12 +2996,23 @@
         if(trip){
           if(field === 'arrive'){
             trip.arriveAAMU = document.getElementById(`edit-arrive-time-${tripId}`).value;
-          } else {
+          } else if(field === 'depart'){
             trip.departAAMU = document.getElementById(`edit-depart-time-${tripId}`).value;
             trip.departGoing = parseInt(document.getElementById(`edit-depart-going-${tripId}`).value,10) || 0;
             trip.departComing = parseInt(document.getElementById(`edit-depart-coming-${tripId}`).value,10) || 0;
+            trip.departLeftBehind = parseInt(document.getElementById(`edit-depart-leftbehind-${tripId}`).value,10) || 0;
             const cap = trip.vehicleCapacity || DEFAULT_CAPACITY;
             trip.departOverflow = trip.departGoing > cap || trip.departComing > cap;
+          } else if(field.startsWith('stop:')){
+            const si = parseInt(field.split(':')[1],10);
+            const stop = trip.stops[si];
+            if(stop){
+              stop.going = parseInt(document.getElementById(`edit-stop-going-${tripId}-${si}`).value,10) || 0;
+              stop.coming = parseInt(document.getElementById(`edit-stop-coming-${tripId}-${si}`).value,10) || 0;
+              stop.leftBehind = parseInt(document.getElementById(`edit-stop-leftbehind-${tripId}-${si}`).value,10) || 0;
+              const cap = trip.vehicleCapacity || DEFAULT_CAPACITY;
+              stop.overflow = stop.going > cap || stop.coming > cap;
+            }
           }
           await saveDay(day);
         }

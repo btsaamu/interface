@@ -123,12 +123,10 @@
     .p-table td.p-unassigned{color:#A63A2E;font-weight:800;}
     .p-table td.p-dash{color:#c8beb2;font-weight:400;}
     .p-table-daily td{font-size:14px;}
-    .p-table td.p-lunch{font-size:11px;}
-    .p-table td.p-lunch .p-time{font-weight:800;font-size:12px;display:block;}
-    .p-table td.p-lunch .p-relief{display:block;font-size:14px;font-weight:800;color:#221B1A;margin-top:1px;}
-    .p-table td.p-lunch .p-relief .p-lbl{font-size:8.5px;font-weight:400;color:#8a7d76;text-transform:uppercase;letter-spacing:0.03em;display:block;}
-    .p-table td.p-lunch .p-relief-missing{color:#A63A2E;font-weight:700;font-size:10px;}
-    .p-table td.p-lunch .p-none{color:#8a7d76;font-weight:400;font-size:9.5px;}
+    .p-table td.p-relief-col{font-size:16px;font-weight:800;color:#221B1A;}
+    .p-table td.p-time-col{font-size:13px;font-weight:700;}
+    .p-table td.p-relief-missing{color:#A63A2E;font-weight:700;font-size:11px;}
+    .p-table td.p-relief-col .p-none, .p-table td.p-time-col .p-none{color:#8a7d76;font-weight:400;font-size:10px;}
     .p-section-label{margin-top:8px;font-size:10px;text-transform:uppercase;letter-spacing:0.03em;color:#6E1E2C;font-weight:800;border-bottom:1.5px solid #6E1E2C;padding-bottom:2px;font-family:Arial,Helvetica,sans-serif;}
   }
 </style>
@@ -565,10 +563,13 @@ function buildDailyPrintHtml(day){
           ? `<td>${r.shifts2[day].map(s=>s.driver==='UNASSIGNED'?'<span class="p-unassigned">UNASSIGNED</span>':s.driver).join(' (AM) / ')+(r.shifts2[day].length>1?' (PM)':'')}</td>`
           : printCellHtml(r.days[day]));
     const lunch = (!holidayForDay && r.lunch && r.lunch[day]) ? r.lunch[day] : null;
-    const lunchCell = lunch
-      ? `<td class="p-lunch">${lunch.time?`<span class="p-time">${label(lunch.time)}</span>`:''}${lunch.driver?`<span class="p-relief"><span class="p-lbl">Relief</span>${lunch.driver}</span>`:`<span class="p-relief-missing">Relief not yet assigned</span>`}</td>`
-      : `<td class="p-lunch"><span class="p-none">No lunch relief needed</span></td>`;
-    return `<tr><td class="p-route">${r.name}<span class="p-veh">${r.vehicle}</span></td>${driverCell}${lunchCell}</tr>`;
+    const reliefCell = lunch
+      ? (lunch.driver ? `<td class="p-relief-col">${lunch.driver}</td>` : `<td class="p-relief-col"><span class="p-relief-missing">Not yet assigned</span></td>`)
+      : `<td class="p-relief-col"><span class="p-none">&mdash;</span></td>`;
+    const timeCell = lunch
+      ? (lunch.time ? `<td class="p-time-col">${label(lunch.time)}</td>` : `<td class="p-time-col"><span class="p-none">&mdash;</span></td>`)
+      : `<td class="p-time-col"><span class="p-none">No lunch relief needed</span></td>`;
+    return `<tr><td class="p-route">${r.name}<span class="p-veh">${r.vehicle}</span></td>${driverCell}${reliefCell}${timeCell}</tr>`;
   }
 
   let html = `
@@ -577,14 +578,14 @@ function buildDailyPrintHtml(day){
       <div class="p-subject-change">SUBJECT TO CHANGE</div>
     </div>
     <table class="p-table p-table-daily">
-      <tr><th style="width:34%;">Route</th><th style="width:26%;">Driver</th><th style="width:40%;">Lunch</th></tr>
+      <tr><th style="width:30%;">Route</th><th style="width:22%;">Driver</th><th style="width:22%;">Relief</th><th style="width:26%;">Lunch Time</th></tr>
       ${mainRoutes.map(routeRow).join('')}
     </table>`;
   if(secondaryRoutes.length){
     html += `
     <div class="p-section-label">${secondaryLabel}</div>
     <table class="p-table p-table-daily">
-      <tr><th style="width:34%;">Route</th><th style="width:26%;">Driver</th><th style="width:40%;">Lunch</th></tr>
+      <tr><th style="width:30%;">Route</th><th style="width:22%;">Driver</th><th style="width:22%;">Relief</th><th style="width:26%;">Lunch Time</th></tr>
       ${secondaryRoutes.map(routeRow).join('')}
     </table>`;
   }
@@ -1404,6 +1405,38 @@ function computePreviewSnapshot(weekStartISO){
   });
   return snapshot;
 }
+function buildWeekPrintHtmlFromSnapshot(snapshot){
+  const weekDates = weekDatesFromMonday(snapshot.weekStart);
+  const monLabel = fmtFullDate(weekDates.Mon).replace(/, \d{4}$/,'');
+  const sunLabel = fmtFullDate(weekDates.Sun);
+  const rows = DATA.routes.map(r=>{
+    const cells = DAYS.map(d=>{
+      const dayData = snapshot.days[d];
+      if(dayData.holiday){
+        if(r.name==="East WKND" || r.name==="West WKND") return printCellHtml(dayData.routes[r.name]);
+        return `<td class="p-dash">${dayData.holiday}</td>`;
+      }
+      const val = dayData.routes[r.name];
+      if(val===undefined) return `<td class="p-dash">&mdash;</td>`;
+      if(Array.isArray(val)){
+        const names = val.map(v=> v==='UNASSIGNED' ? '<span class="p-unassigned">UNASSIGNED</span>' : v).join(' / ');
+        return `<td>${names}</td>`;
+      }
+      return printCellHtml(val);
+    }).join('');
+    return `<tr><td class="p-route">${r.name}<span class="p-veh">${r.vehicle}</span></td>${cells}</tr>`;
+  }).join('');
+  return `
+    <div class="p-header">
+      <div><h1>BTS WEEK SCHEDULE &mdash; PREVIEW</h1><div class="p-sub">Week of ${monLabel} &ndash; ${sunLabel}</div></div>
+      <div class="p-subject-change">SUBJECT TO CHANGE</div>
+    </div>
+    <div style="background:#FBF3E1;border:1.5px solid #C7973F;border-radius:5px;padding:4px 10px;margin-bottom:6px;font-size:9px;color:#5a4a1f;font-weight:800;text-transform:uppercase;letter-spacing:0.03em;">Preview &mdash; not yet the live schedule</div>
+    <table class="p-table">
+      <tr><th>Route</th>${DAYS.map(d=>`<th>${d} ${fmtDate(weekDates[d])}</th>`).join('')}</tr>
+      ${rows}
+    </table>`;
+}
 
 function renderLunch(){
   const el = document.getElementById('view-lunch');
@@ -1649,9 +1682,10 @@ function renderWeek(){
     : `Nothing has been published to drivers yet.`;
   planCard.innerHTML = `<h2 class="display">Plan a future week</h2>
     <p class="note">Pick any date in the week you want to plan and click "Load week." Changes here are staged separately — they won't touch the live schedule or anything drivers see until you explicitly publish or apply below.</p>
-    <div class="form-row" style="grid-template-columns:1fr 1fr;margin-bottom:14px;">
+    <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:14px;">
       <div><label>Any date in the week to plan</label><input type="date" id="planDatePicker" value="${planSelectedMonday}"></div>
       <div><button class="addbtn" id="planLoadWeek">Load week</button></div>
+      <div><button class="addbtn" id="planPrintBtn">🖨 Print This Week (Preview)</button></div>
     </div>
     <table class="grid" id="planGrid"></table>
     <div id="planConcerns" style="margin-top:14px;"></div>
@@ -1680,6 +1714,9 @@ function renderWeek(){
   }
   document.getElementById('planDatePicker').onchange = loadPlanWeek;
   document.getElementById('planLoadWeek').onclick = loadPlanWeek;
+  document.getElementById('planPrintBtn').onclick = ()=>{
+    printSchedule(buildWeekPrintHtmlFromSnapshot(computePreviewSnapshot(planSelectedMonday)));
+  };
 
   const planWeek = weekDatesFromMonday(planSelectedMonday);
   const planTable = document.getElementById('planGrid');
