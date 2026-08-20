@@ -123,6 +123,10 @@
     .p-table td.p-unassigned{color:#A63A2E;font-weight:800;}
     .p-table td.p-dash{color:#c8beb2;font-weight:400;}
     .p-table-daily td{font-size:14px;}
+    .p-table-daily td.p-route{font-size:17px;font-weight:800;}
+    .p-table-daily td.p-route .p-veh{font-size:9.5px;margin-top:2px;}
+    .p-table-daily td.p-route .p-veh.p-novehicle{color:#A63A2E;font-weight:700;}
+    .p-table-daily td.p-driver-col{font-size:19px;font-weight:800;}
     .p-table td.p-relief-col{font-size:16px;font-weight:800;color:#221B1A;}
     .p-table td.p-time-col{font-size:13px;font-weight:700;}
     .p-table td.p-relief-missing{color:#A63A2E;font-weight:700;font-size:11px;}
@@ -508,11 +512,12 @@ function tripDriversLabel(t){ return (t.drivers && t.drivers.length) ? t.drivers
 function fmtDate(iso){ const [y,m,d]=iso.split('-').map(Number); const dt=new Date(y,m-1,d); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
 function fmtFullDate(iso){ const [y,m,d]=iso.split('-').map(Number); const dt=new Date(y,m-1,d); return dt.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}); }
 
-function printCellHtml(val){
-  if(val===undefined) return `<td class="p-dash">&mdash;</td>`;
-  if(val==='UNASSIGNED') return `<td class="p-unassigned">UNASSIGNED</td>`;
-  if(val==='N/A') return `<td class="p-dash">N/A</td>`;
-  return `<td>${val}</td>`;
+function printCellHtml(val, extraClass){
+  const cls = extraClass ? ` ${extraClass}` : '';
+  if(val===undefined) return `<td class="p-dash${cls}">&mdash;</td>`;
+  if(val==='UNASSIGNED') return `<td class="p-unassigned${cls}">UNASSIGNED</td>`;
+  if(val==='N/A') return `<td class="p-dash${cls}">N/A</td>`;
+  return `<td class="${extraClass||''}">${val}</td>`;
 }
 function printRouteRowCells(r, days){
   const isWeekendRoute = (r.name==="East WKND" || r.name==="West WKND");
@@ -556,12 +561,18 @@ function buildDailyPrintHtml(day){
   const secondaryRoutes = holidayForDay ? [] : DATA.routes.filter(r=>(r.cat==="Night"||r.cat==="Weekend") && routeActiveOn(r,day));
   const secondaryLabel = secondaryRoutes.some(r=>r.cat==="Night") ? "Night Schedule" : "Weekend Schedule";
 
+  function lunchTimeMin(r){
+    const lunch = (!holidayForDay && r.lunch && r.lunch[day]) ? r.lunch[day] : null;
+    return (lunch && lunch.time) ? toMin(lunch.time) : Infinity; // no lunch time sinks to the bottom
+  }
+  function byLunchTime(a,b){ return lunchTimeMin(a) - lunchTimeMin(b); }
+
   function routeRow(r){
     const driverCell = holidayForDay
-      ? printCellHtml((DATA.holidays[dateISO].assignments && DATA.holidays[dateISO].assignments[r.name]) || 'UNASSIGNED')
+      ? printCellHtml((DATA.holidays[dateISO].assignments && DATA.holidays[dateISO].assignments[r.name]) || 'UNASSIGNED', 'p-driver-col')
       : (r.shifts2 && r.shifts2[day]
-          ? `<td>${r.shifts2[day].map(s=>s.driver==='UNASSIGNED'?'<span class="p-unassigned">UNASSIGNED</span>':s.driver).join(' (AM) / ')+(r.shifts2[day].length>1?' (PM)':'')}</td>`
-          : printCellHtml(r.days[day]));
+          ? `<td class="p-driver-col">${r.shifts2[day].map(s=>s.driver==='UNASSIGNED'?'<span class="p-unassigned">UNASSIGNED</span>':s.driver).join(' (AM) / ')+(r.shifts2[day].length>1?' (PM)':'')}</td>`
+          : printCellHtml(r.days[day], 'p-driver-col'));
     const lunch = (!holidayForDay && r.lunch && r.lunch[day]) ? r.lunch[day] : null;
     const reliefCell = lunch
       ? (lunch.driver ? `<td class="p-relief-col">${lunch.driver}</td>` : `<td class="p-relief-col"><span class="p-relief-missing">Not yet assigned</span></td>`)
@@ -569,7 +580,8 @@ function buildDailyPrintHtml(day){
     const timeCell = lunch
       ? (lunch.time ? `<td class="p-time-col">${label(lunch.time)}</td>` : `<td class="p-time-col"><span class="p-none">&mdash;</span></td>`)
       : `<td class="p-time-col"><span class="p-none">No lunch relief needed</span></td>`;
-    return `<tr><td class="p-route">${r.name}<span class="p-veh">${r.vehicle}</span></td>${driverCell}${reliefCell}${timeCell}</tr>`;
+    const vehLabel = r.vehicle ? `<span class="p-veh">${r.vehicle}</span>` : `<span class="p-veh p-novehicle">No vehicle assigned</span>`;
+    return `<tr><td class="p-route">${r.name}${vehLabel}</td>${driverCell}${reliefCell}${timeCell}</tr>`;
   }
 
   let html = `
@@ -579,14 +591,14 @@ function buildDailyPrintHtml(day){
     </div>
     <table class="p-table p-table-daily">
       <tr><th style="width:30%;">Route</th><th style="width:22%;">Driver</th><th style="width:22%;">Relief</th><th style="width:26%;">Lunch Time</th></tr>
-      ${mainRoutes.map(routeRow).join('')}
+      ${mainRoutes.slice().sort(byLunchTime).map(routeRow).join('')}
     </table>`;
   if(secondaryRoutes.length){
     html += `
     <div class="p-section-label">${secondaryLabel}</div>
     <table class="p-table p-table-daily">
       <tr><th style="width:30%;">Route</th><th style="width:22%;">Driver</th><th style="width:22%;">Relief</th><th style="width:26%;">Lunch Time</th></tr>
-      ${secondaryRoutes.map(routeRow).join('')}
+      ${secondaryRoutes.slice().sort(byLunchTime).map(routeRow).join('')}
     </table>`;
   }
   return html;
