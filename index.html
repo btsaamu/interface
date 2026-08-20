@@ -329,7 +329,7 @@
     drake:            {label:"Drake", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
     bulldog:          {label:"Bulldog", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
     normal_hills:     {label:"Normal Hills", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
-    floater:          {label:"Floater", category:"Day", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
+    floater:          {label:"Floater", category:"Day", stops:["Stop"], flexibleStops:true},
     paratransit:      {label:"Paratransit", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
     paratransit_night:{label:"Paratransit Night", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:18, endHour:22, legs:[{label:"Depart AAMU",offset:0}]}},
     trips:            {label:"Trips", category:"On-Campus", simplified:true, dualVehicle:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}}
@@ -1334,9 +1334,10 @@
       grid.innerHTML = routeGridHtml(state.selectedRouteChoice);
       const nextRunBox = document.getElementById("pretrip-next-run");
       function showNextRun(key){
-        if(!key){ nextRunBox.style.display = "none"; return; }
+        const result = key ? nextScheduledRun(key) : null;
+        if(!result){ nextRunBox.style.display = "none"; return; }
         nextRunBox.style.display = "block";
-        nextRunBox.textContent = `Next Scheduled Run for ${routeShort(key)}: ${nextScheduledRun(key)}`;
+        nextRunBox.textContent = `Next Scheduled Run for ${routeShort(key)}: ${result}`;
       }
       showNextRun(state.selectedRouteChoice);
       wireRouteGrid(grid, (key) => {
@@ -1461,6 +1462,9 @@
       btn.disabled = true; btn.style.opacity = "0.7"; btn.textContent = "STARTING…";
       try{
         await beginRoute(already, items, isEV, useSectioned, isDiesel);
+      } catch(err){
+        console.error("beginRoute failed:", err);
+        alert("Something went wrong starting your route, and it wasn't saved. Please check your connection and try again. If this keeps happening, tell dispatch what you were doing and this: " + (err && err.message ? err.message : String(err)));
       } finally {
         if(document.body.contains(btn)){ btn.disabled = false; btn.style.opacity = ""; btn.textContent = originalText; }
       }
@@ -1470,7 +1474,8 @@
   async function beginRoute(already, items, isEV, useSectioned, isDiesel){
     items = items || PRETRIP_ITEMS;
     if(useSectioned === undefined) useSectioned = isEV;
-    document.getElementById("route-grid").style.outline = "";
+    const routeGridEl0 = document.getElementById("route-grid");
+    if(routeGridEl0) routeGridEl0.style.outline = "";
     document.getElementById("d-vehicle").classList.remove("pt-error-field");
     const vehicle = document.getElementById("d-vehicle").value.trim();
     const capacity = parseInt(document.getElementById("d-capacity").value,10) || DEFAULT_CAPACITY;
@@ -1478,8 +1483,7 @@
 
     if(!state.selectedRouteChoice){
       const grid = document.getElementById("route-grid");
-      grid.style.outline = "2px solid var(--alert-red)"; grid.style.borderRadius = "10px";
-      firstError = firstError || grid;
+      if(grid){ grid.style.outline = "2px solid var(--alert-red)"; grid.style.borderRadius = "10px"; firstError = firstError || grid; }
     }
     if(!vehicle){
       const vf = document.getElementById("d-vehicle");
@@ -1817,6 +1821,16 @@
         </div>
       `;
     }
+    if(state.stopPhase === 'flex_choice'){
+      return `
+        <div class="card">
+          <div class="card-label">Stop Logged</div>
+          <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px;">Do you have another stop, or are you heading back to AAMU?</div>
+          <button class="btn btn-primary big-log-btn" id="flex-another-stop-btn">LOG ANOTHER STOP</button>
+          <button class="btn btn-outline big-log-btn" id="flex-return-aamu-btn" style="margin-top:8px;">RETURNING TO AAMU</button>
+        </div>
+      `;
+    }
     if(state.stopPhase === 'arriving'){
       const displayName = state.divertedName || defaultStopName;
       return `
@@ -1905,38 +1919,52 @@
       });
       document.getElementById("log-campus-depart-btn").onclick = async () => {
         const btn = document.getElementById("log-campus-depart-btn");
+        const originalText = btn.textContent;
         btn.disabled = true; btn.textContent = "Logging…";
-        const time = document.getElementById("campus-time-input").value;
-        const going = parseInt(document.getElementById("stepper-going").dataset.count,10);
-        const coming = parseInt(document.getElementById("stepper-coming").dataset.count,10);
-        const overflowActive = ofToggleC.dataset.active === "1";
-        const leftBehind = overflowActive ? parseInt(lbBoxC.dataset.count,10) : 0;
-        const overflow = going > cap || coming > cap || overflowActive;
-        const geo = await getGeo();
-        trip.departAAMU = time;
-        trip.departMeta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
-        trip.departGoing = going; trip.departComing = coming; trip.departLeftBehind = leftBehind; trip.departOverflow = overflow; trip.departAcknowledged = false;
-        trip.departNote = (document.getElementById("campus-depart-note").value||"").trim();
-        await syncTrip(trip);
-        state.stopPhase = 'arriving';
-        renderLogPage();
+        try{
+          const time = document.getElementById("campus-time-input").value;
+          const going = parseInt(document.getElementById("stepper-going").dataset.count,10);
+          const coming = parseInt(document.getElementById("stepper-coming").dataset.count,10);
+          const overflowActive = ofToggleC.dataset.active === "1";
+          const leftBehind = overflowActive ? parseInt(lbBoxC.dataset.count,10) : 0;
+          const overflow = going > cap || coming > cap || overflowActive;
+          const geo = await getGeo();
+          trip.departAAMU = time;
+          trip.departMeta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
+          trip.departGoing = going; trip.departComing = coming; trip.departLeftBehind = leftBehind; trip.departOverflow = overflow; trip.departAcknowledged = false;
+          trip.departNote = (document.getElementById("campus-depart-note").value||"").trim();
+          await syncTrip(trip);
+          state.stopPhase = 'arriving';
+          renderLogPage();
+        } catch(err){
+          console.error("Log departure failed:", err);
+          alert("Something went wrong logging your departure. Please try again. If this keeps happening, tell dispatch this: " + (err && err.message ? err.message : String(err)));
+          if(document.body.contains(btn)){ btn.disabled = false; btn.textContent = originalText; }
+        }
       };
       const noPassBtn = document.getElementById("no-passengers-btn");
       if(noPassBtn){
         noPassBtn.onclick = async () => {
+          const originalText = noPassBtn.textContent;
           noPassBtn.disabled = true; noPassBtn.textContent = "Logging…";
-          const time = document.getElementById("campus-time-input").value;
-          const geo = await getGeo();
-          const meta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
-          trip.departAAMU = time; trip.departMeta = meta;
-          trip.departGoing = 0; trip.departComing = 0; trip.departLeftBehind = 0; trip.departOverflow = false; trip.departAcknowledged = false;
-          trip.noPassengers = true;
-          trip.arriveAAMU = time; trip.arriveMeta = meta;
-          trip.complete = true;
-          state.myCompletedTrips.push(trip);
-          state.myTrip = null;
-          await syncTrip(trip);
-          await startTripInternal();
+          try{
+            const time = document.getElementById("campus-time-input").value;
+            const geo = await getGeo();
+            const meta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
+            trip.departAAMU = time; trip.departMeta = meta;
+            trip.departGoing = 0; trip.departComing = 0; trip.departLeftBehind = 0; trip.departOverflow = false; trip.departAcknowledged = false;
+            trip.noPassengers = true;
+            trip.arriveAAMU = time; trip.arriveMeta = meta;
+            trip.complete = true;
+            state.myCompletedTrips.push(trip);
+            state.myTrip = null;
+            await syncTrip(trip);
+            await startTripInternal();
+          } catch(err){
+            console.error("No-passengers log failed:", err);
+            alert("Something went wrong, and it wasn't saved. Please try again. If this keeps happening, tell dispatch this: " + (err && err.message ? err.message : String(err)));
+            if(document.body.contains(noPassBtn)){ noPassBtn.disabled = false; noPassBtn.textContent = originalText; }
+          }
         };
       }
       return;
@@ -1945,15 +1973,35 @@
       document.getElementById("fill-now-campus").onclick = () => { document.getElementById("campus-time-input").value = nowTime(); };
       startLiveClock("campus-time-input");
       document.getElementById("log-campus-arrive-btn").onclick = async () => {
-        const time = document.getElementById("campus-time-input").value;
-        const geo = await getGeo();
-        trip.arriveAAMU = time;
-        trip.arriveMeta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
-        trip.complete = true;
-        state.myCompletedTrips.push(trip);
-        state.myTrip = null;
-        await syncTrip(trip);
-        await startTripInternal();
+        const btn = document.getElementById("log-campus-arrive-btn");
+        const originalText = btn.textContent;
+        btn.disabled = true; btn.textContent = "Logging…";
+        try{
+          const time = document.getElementById("campus-time-input").value;
+          const geo = await getGeo();
+          trip.arriveAAMU = time;
+          trip.arriveMeta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
+          trip.complete = true;
+          state.myCompletedTrips.push(trip);
+          state.myTrip = null;
+          await syncTrip(trip);
+          await startTripInternal();
+        } catch(err){
+          console.error("Log arrival failed:", err);
+          alert("Something went wrong logging your arrival, and it wasn't saved. Please try again. If this keeps happening, tell dispatch this: " + (err && err.message ? err.message : String(err)));
+          if(document.body.contains(btn)){ btn.disabled = false; btn.textContent = originalText; }
+        }
+      };
+      return;
+    }
+    if(state.stopPhase === 'flex_choice'){
+      document.getElementById("flex-another-stop-btn").onclick = () => {
+        state.stopPhase = 'arriving';
+        renderLogPage();
+      };
+      document.getElementById("flex-return-aamu-btn").onclick = () => {
+        state.stopPhase = 'arrive_campus';
+        renderLogPage();
       };
       return;
     }
@@ -1966,14 +2014,23 @@
       document.getElementById("fill-now-arrive").onclick = () => { document.getElementById("arrive-time-input").value = nowTime(); };
       startLiveClock("arrive-time-input");
       document.getElementById("log-arrival-btn").onclick = async () => {
-        const diffInput = document.getElementById("diff-loc-input");
-        state.divertedName = diffInput ? diffInput.value.trim() : '';
-        const name = state.divertedName || defaultStopName;
-        const arrive = document.getElementById("arrive-time-input").value;
-        const geo = await getGeo();
-        state.pendingStop = { name, diverted: !!state.divertedName, arrive, arriveMeta:{timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError} };
-        state.stopPhase = 'departing';
-        renderLogPage();
+        const btn = document.getElementById("log-arrival-btn");
+        const originalText = btn.textContent;
+        btn.disabled = true; btn.textContent = "Logging…";
+        try{
+          const diffInput = document.getElementById("diff-loc-input");
+          state.divertedName = diffInput ? diffInput.value.trim() : '';
+          const name = state.divertedName || defaultStopName;
+          const arrive = document.getElementById("arrive-time-input").value;
+          const geo = await getGeo();
+          state.pendingStop = { name, diverted: !!state.divertedName, arrive, arriveMeta:{timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError} };
+          state.stopPhase = 'departing';
+          renderLogPage();
+        } catch(err){
+          console.error("Log arrival (stop) failed:", err);
+          alert("Something went wrong logging your arrival. Please try again. If this keeps happening, tell dispatch this: " + (err && err.message ? err.message : String(err)));
+          if(document.body.contains(btn)){ btn.disabled = false; btn.textContent = originalText; }
+        }
       };
       return;
     }
@@ -2012,35 +2069,44 @@
     });
     document.getElementById("log-departure-btn").onclick = async () => {
       const btn = document.getElementById("log-departure-btn");
+      const originalText = btn.textContent;
       btn.disabled = true; btn.textContent = "Logging…";
-      const depart = document.getElementById("depart-time-input").value;
-      const diffInputDepart = document.getElementById("diff-loc-input-depart");
-      state.divertedName = diffInputDepart ? diffInputDepart.value.trim() : (state.divertedName||'');
-      const finalName = state.divertedName || state.pendingStop.name;
-      const going = parseInt(document.getElementById("stepper-going").dataset.count,10);
-      const coming = parseInt(document.getElementById("stepper-coming").dataset.count,10);
-      const overflowActive = ofToggle.dataset.active === "1";
-      const leftBehind = overflowActive ? parseInt(lbBox.dataset.count,10) : 0;
-      const overflow = going > cap || coming > cap || overflowActive;
-      const geo = await getGeo();
-      const departMeta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
-      const stopRecord = {
-        name: finalName, diverted: state.pendingStop.diverted || !!state.divertedName,
-        arrive: state.pendingStop.arrive, arriveMeta: state.pendingStop.arriveMeta,
-        depart, departMeta, going, coming, leftBehind, overflow, acknowledged:false,
-        note: (document.getElementById("stop-depart-note").value||"").trim(),
-        systemTimestamp: state.pendingStop.arriveMeta.timestamp
-      };
-      trip.stops.push(stopRecord);
-      await syncTrip(trip);
-      state.pendingStop = null; state.divertedName='';
+      try{
+        const depart = document.getElementById("depart-time-input").value;
+        const diffInputDepart = document.getElementById("diff-loc-input-depart");
+        state.divertedName = diffInputDepart ? diffInputDepart.value.trim() : (state.divertedName||'');
+        const finalName = state.divertedName || state.pendingStop.name;
+        const going = parseInt(document.getElementById("stepper-going").dataset.count,10);
+        const coming = parseInt(document.getElementById("stepper-coming").dataset.count,10);
+        const overflowActive = ofToggle.dataset.active === "1";
+        const leftBehind = overflowActive ? parseInt(lbBox.dataset.count,10) : 0;
+        const overflow = going > cap || coming > cap || overflowActive;
+        const geo = await getGeo();
+        const departMeta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
+        const stopRecord = {
+          name: finalName, diverted: state.pendingStop.diverted || !!state.divertedName,
+          arrive: state.pendingStop.arrive, arriveMeta: state.pendingStop.arriveMeta,
+          depart, departMeta, going, coming, leftBehind, overflow, acknowledged:false,
+          note: (document.getElementById("stop-depart-note").value||"").trim(),
+          systemTimestamp: state.pendingStop.arriveMeta.timestamp
+        };
+        trip.stops.push(stopRecord);
+        await syncTrip(trip);
+        state.pendingStop = null; state.divertedName='';
 
-      if(trip.stops.length >= route.stops.length){
-        state.stopPhase = 'arrive_campus';
-      } else {
-        state.stopPhase = 'arriving';
+        if(route.flexibleStops){
+          state.stopPhase = 'flex_choice';
+        } else if(trip.stops.length >= route.stops.length){
+          state.stopPhase = 'arrive_campus';
+        } else {
+          state.stopPhase = 'arriving';
+        }
+        renderLogPage();
+      } catch(err){
+        console.error("Log departure (stop) failed:", err);
+        alert("Something went wrong logging your departure. Please try again. If this keeps happening, tell dispatch this: " + (err && err.message ? err.message : String(err)));
+        if(document.body.contains(btn)){ btn.disabled = false; btn.textContent = originalText; }
       }
-      renderLogPage();
     };
   }
 
@@ -2133,11 +2199,20 @@
         return;
       }
       const answers = items.map((q,i)=>({question:q, answer:state.postTripAnswers[i], note: state.postTripAnswers[i]==='yes' ? (document.getElementById("pp-explain-"+i).value||"") : ""}));
-      currentShift().posttrip = {done:true, answers, endingFuel:state.posttripFuel, completedAt:new Date().toISOString()};
-      if(showEndingMileage) currentShift().posttrip.endingMileage = mileageInput.value.trim();
-      if(showTotalPassengers) currentShift().posttrip.totalPassengers = parseInt(totalInput.value,10) || 0;
-      await saveShiftRecord(state.driverLock.name, state.shiftRecord);
-      renderDaySummaryPage();
+      const submitBtn = document.getElementById("submit-posttrip-btn");
+      const originalText = submitBtn.textContent;
+      submitBtn.disabled = true; submitBtn.style.opacity = "0.7"; submitBtn.textContent = "SUBMITTING…";
+      try{
+        currentShift().posttrip = {done:true, answers, endingFuel:state.posttripFuel, completedAt:new Date().toISOString()};
+        if(showEndingMileage) currentShift().posttrip.endingMileage = mileageInput.value.trim();
+        if(showTotalPassengers) currentShift().posttrip.totalPassengers = parseInt(totalInput.value,10) || 0;
+        await saveShiftRecord(state.driverLock.name, state.shiftRecord);
+        renderDaySummaryPage();
+      } catch(err){
+        console.error("Post-trip submit failed:", err);
+        alert("Something went wrong submitting your post-trip, and it wasn't saved. Please check your connection and try again. If this keeps happening, tell dispatch what you were doing and this: " + (err && err.message ? err.message : String(err)));
+        if(document.body.contains(submitBtn)){ submitBtn.disabled = false; submitBtn.style.opacity = ""; submitBtn.textContent = originalText; }
+      }
     };
   }
 
