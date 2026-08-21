@@ -440,6 +440,23 @@ function migrateData(d){
       Object.keys(r.shifts2).forEach(day=>{ if(r.days[day]!==undefined) delete r.days[day]; });
     }
   });
+  // Repair data lost to a separate, now-fixed Apply bug: applying a staged "merge to one
+  // shift" could leave a weekday with NEITHER a shifts2 entry NOR a days entry at all — an
+  // un-editable dash — if that day had only ever existed as a split shift before (true for
+  // Bulldog's Tue/Wed/Thu/Fri, for example). Restore it to UNASSIGNED so it's visible and
+  // editable again; the correct driver will need to be re-entered by hand since the original
+  // value was actually lost, not just hidden.
+  d.routes.forEach(r=>{
+    if(!r.splitEligible) return;
+    ["Mon","Tue","Wed","Thu","Fri"].forEach(day=>{
+      const hasDays = r.days && r.days[day]!==undefined;
+      const hasShifts2 = r.shifts2 && r.shifts2[day];
+      if(!hasDays && !hasShifts2){
+        if(!r.days) r.days = {};
+        r.days[day] = "UNASSIGNED";
+      }
+    });
+  });
   if(!d.routes.some(r=>r.name==="Bulldog 1")){
     const fresh = JSON.parse(JSON.stringify(DEFAULT_DATA.routes.find(r=>r.name==="Bulldog 1")));
     d.routes.splice(1, 0, fresh);
@@ -616,7 +633,14 @@ function getWeekDates(){
   DAYS.forEach((d,i)=>{ const dt=new Date(monday.getFullYear(),monday.getMonth(),monday.getDate()+i); map[d]=isoDate(dt); });
   return map;
 }
-const WEEK = getWeekDates();
+function realCurrentMonday(){
+  const now = new Date();
+  const dow = now.getDay();
+  const diffToMonday = (dow===0? -6 : 1-dow);
+  const monday = new Date(now.getFullYear(),now.getMonth(),now.getDate()+diffToMonday);
+  return isoDate(monday);
+}
+let WEEK = getWeekDates();
 function mondayISOFrom(dateStr){
   const [y,m,dd] = dateStr.split('-').map(Number);
   const dt = new Date(y, m-1, dd);
@@ -687,9 +711,18 @@ async function loadData(){
       migrateData(DATA);
     }
   }catch(e){ /* use defaults */ }
+  WEEK = weekDatesFromMonday(resolveViewedWeekStart());
   snapshotToday();
   buildTabs();
   renderAll();
+}
+function resolveViewedWeekStart(){
+  const stored = DATA.viewedWeekStart;
+  const real = realCurrentMonday();
+  // A manually-chosen week only sticks while it's today-or-future; once real time
+  // passes it, it automatically reverts to showing the real current week again.
+  if(stored && stored >= real) return stored;
+  return real;
 }
 async function saveData(){
   snapshotToday();
@@ -1521,14 +1554,39 @@ function renderWeek(){
   el.innerHTML = '';
   el.appendChild(renderScheduleSubNav('week'));
   const gridCard = document.createElement('div'); gridCard.className='card';
+  const isRealWeek = WEEK.Mon === realCurrentMonday();
   gridCard.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
       <h2 class="display" style="margin:0;">Week schedule</h2>
       <button class="addbtn" id="printWeekBtn" style="display:flex;align-items:center;gap:6px;">🖨 Print This Week</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin:10px 0;padding:8px 10px;background:#F3EEE6;border-radius:6px;flex-wrap:wrap;">
+      <label style="font-size:11px;font-weight:700;color:var(--maroon-dark);text-transform:uppercase;letter-spacing:0.03em;">Viewing week of</label>
+      <input type="date" id="weekNavPicker" value="${WEEK.Mon}">
+      ${!isRealWeek ? `<button class="linkbtn-sm" id="weekNavToday" style="display:inline-block;width:auto;">Jump to real current week</button><span style="font-size:11px;color:#8a7d76;">This will automatically switch back once the real week catches up to it.</span>` : ``}
     </div>
     <p class="note">Changes here update the Dashboard and Schedule tabs immediately. Choose "— Unassigned —" to mark a shift open. Cells for days a route doesn't normally run are shown as "—". Use "Set whole week" on the right to fill every day at once instead of one cell at a time. Toggle "No School" under a date to switch that day to East WKND/West WKND only.</p>
     <table class="grid" id="weekGrid"></table>`;
   el.appendChild(gridCard);
   document.getElementById('printWeekBtn').onclick = ()=> printSchedule(buildWeekPrintHtml());
+  document.getElementById('weekNavPicker').onchange = (e)=>{
+    const raw = e.target.value;
+    if(!raw) return;
+    const monday = mondayISOFrom(raw);
+    if(monday.includes('NaN')) return;
+    DATA.viewedWeekStart = monday;
+    WEEK = weekDatesFromMonday(monday);
+    saveData();
+    renderAll();
+  };
+  const jumpBtn = document.getElementById('weekNavToday');
+  if(jumpBtn){
+    jumpBtn.onclick = ()=>{
+      DATA.viewedWeekStart = realCurrentMonday();
+      WEEK = weekDatesFromMonday(DATA.viewedWeekStart);
+      saveData();
+      renderAll();
+    };
+  }
   const table = document.getElementById('weekGrid');
   let html = '<tr><th>Route</th>' + DAYS.map(d=>{
     const dateISO = WEEK[d];
@@ -1935,7 +1993,7 @@ function renderWeek(){
             if(r.days[d]!==undefined) delete r.days[d];
           } else {
             if(r.shifts2 && r.shifts2[d]) delete r.shifts2[d];
-            if(r.days[d]!==undefined) r.days[d] = val;
+            r.days[d] = val;
           }
         });
       });
@@ -1946,6 +2004,8 @@ function renderWeek(){
       }
       delete DATA.weekOverrides[planSelectedMonday];
     }
+    DATA.viewedWeekStart = planSelectedMonday;
+    WEEK = weekDatesFromMonday(planSelectedMonday);
     saveData(); renderAll();
     setTimeout(()=>{
       const el = document.getElementById('planApplyStatus');
