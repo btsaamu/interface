@@ -893,7 +893,7 @@
     pretripMileage:'', pretripExplains:{}, damageExplainText:'',
     stopPhase:'arriving', pendingStop:null, divertedName:'',
     pendingIds:new Set(), changingRoute:false,
-    dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(), lastSignIns:[], lastSignInSearch:null, lastConsolidatedSearch:null, simplifiedRoutePassengers:{total:0, byRoute:{}},
+    dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(), lastSignIns:[], lastSignInSearch:null, lastConsolidatedSearch:null, simplifiedRoutePassengers:{total:0, byRoute:{}, flagged:[]}, pretripPosttripToday:[], pretripPosttripLookup:null,
     day:{trips:[]}, lastKnownDay:{trips:[]}, pollHandle:null, flushHandle:null
   };
   state.flushHandle = setInterval(flushPending, 8000);
@@ -2365,6 +2365,7 @@
     state.lastIssues = issues;
     state.lastSignIns = await loadDriverSignIns();
     state.simplifiedRoutePassengers = await loadSimplifiedRoutePassengers();
+    state.pretripPosttripToday = await loadPretripPosttripStatus();
     if(state.dispatchTab === 'map' && busMapInstance) return; // don't tear down the live map's DOM every 5s
     const preserved = captureDispatchInputs();
     renderDispatch(issues);
@@ -2374,14 +2375,66 @@
   // Sums Post-Trip "Total Passengers" from on-campus and Trips routes (which don't log
   // per-stop counts) so they count toward dispatch's overall rider total. Also broken down
   // per route so each route box can show a real number instead of always reading 0.
+  // A single shift reporting more than this in one day is almost certainly a typo
+  // (an extra digit, a fat-fingered entry) rather than a real number — exclude it from
+  // the total rather than letting one bad entry silently distort the whole day's count,
+  // and surface it so dispatch can go verify/correct the actual figure with the driver.
+  const SINGLE_SHIFT_SANITY_CAP = 150;
+  async function loadPretripPosttripStatus(dateStr){
+    dateStr = dateStr || todayKey();
+    const rows = [];
+    try{
+      const listRes = await window.storage.list("bts-shift-", true);
+      if(!listRes || !listRes.keys) return rows;
+      const seen = new Set();
+      const dateKeys = listRes.keys.filter(k=>{
+        if(seen.has(k)) return false;
+        seen.add(k);
+        return k.length > dateStr.length && k.slice(-(dateStr.length+1)) === "-"+dateStr;
+      });
+      for(const key of dateKeys){
+        try{
+          const r = await window.storage.get(key, true);
+          if(!r) continue;
+          const rec = JSON.parse(r.value);
+          const driverRaw = key.replace(/^bts-shift-/, "").slice(0, -(dateStr.length+1));
+          const driverName = titleCaseFromKey(driverRaw);
+          const shiftsArr = rec.shifts ? rec.shifts : [rec];
+          shiftsArr.forEach((sh,idx)=>{
+            const pretripBad = sh.pretrip ? (sh.pretrip.checklist||[]).filter(c=>c.status==='bad') : [];
+            const posttripBad = sh.posttrip ? (sh.posttrip.answers||[]).filter(a=>a.answer==='yes') : [];
+            rows.push({
+              driver: driverName, shiftIndex: idx,
+              route: sh.pretrip ? sh.pretrip.route : null,
+              vehicle: sh.pretrip ? sh.pretrip.vehicle : null,
+              pretripDone: !!(sh.pretrip && sh.pretrip.done),
+              pretripIssues: pretripBad,
+              pretripDamage: !!(sh.pretrip && sh.pretrip.damage && sh.pretrip.damage.reported),
+              pretripDamageNote: sh.pretrip && sh.pretrip.damage ? sh.pretrip.damage.explain : "",
+              posttripDone: !!(sh.posttrip && sh.posttrip.done),
+              posttripIssues: posttripBad
+            });
+          });
+        }catch(e){}
+      }
+    }catch(e){}
+    rows.sort((a,b)=> a.driver.localeCompare(b.driver) || a.shiftIndex - b.shiftIndex);
+    return rows;
+  }
   async function loadSimplifiedRoutePassengers(dateStr){
     dateStr = dateStr || todayKey();
-    const result = {total: 0, byRoute: {}};
+    const result = {total: 0, byRoute: {}, flagged: []};
     try{
       const listRes = await window.storage.list("bts-shift-", true);
       if(!listRes || !listRes.keys) return result;
-      const suffix = "-"+dateStr;
-      const todayKeys = listRes.keys.filter(k=>k.endsWith(suffix));
+      const seen = new Set();
+      const todayKeys = listRes.keys.filter(k=>{
+        if(seen.has(k)) return false; // guard against any duplicate entries in the returned list
+        seen.add(k);
+        // Strict match: the key must end in exactly "-<dateStr>", not just contain it —
+        // avoids any chance of a loosely-matching key pulling in the wrong day.
+        return k.length > dateStr.length && k.slice(-(dateStr.length+1)) === "-"+dateStr;
+      });
       for(const key of todayKeys){
         try{
           const r = await window.storage.get(key, true);
@@ -2390,9 +2443,14 @@
           const shiftsArr = rec.shifts ? rec.shifts : [rec];
           shiftsArr.forEach(sh=>{
             if(sh.posttrip && typeof sh.posttrip.totalPassengers === 'number'){
-              result.total += sh.posttrip.totalPassengers;
+              const n = sh.posttrip.totalPassengers;
               const routeKey = sh.pretrip && sh.pretrip.route;
-              if(routeKey) result.byRoute[routeKey] = (result.byRoute[routeKey]||0) + sh.posttrip.totalPassengers;
+              if(n > SINGLE_SHIFT_SANITY_CAP){
+                result.flagged.push({key, route: routeKey, driver: sh.pretrip && sh.pretrip.vehicle, count: n});
+                return; // excluded from the total — likely a data-entry error
+              }
+              result.total += n;
+              if(routeKey) result.byRoute[routeKey] = (result.byRoute[routeKey]||0) + n;
             }
           });
         }catch(e){}
@@ -2459,6 +2517,29 @@
     return `<a class="gps-link" href="${url}" target="_blank" rel="noopener">${lat.toFixed(5)}, ${lng.toFixed(5)}</a>`;
   }
 
+  function pretripPosttripRowsHtml(rows){
+    if(rows.length===0) return '<div class="empty-note">No drivers signed in.</div>';
+    return `<div style="overflow-x:auto;"><table style="width:100%;font-size:12px;border-collapse:collapse;min-width:600px;">
+      <tr style="text-align:left;color:var(--muted);font-size:10px;text-transform:uppercase;">
+        <th style="padding:4px;">Driver</th><th style="padding:4px;">Route</th><th style="padding:4px;">Vehicle</th><th style="padding:4px;">Pre-Trip</th><th style="padding:4px;">Post-Trip</th>
+      </tr>
+      ${rows.map(r=>`
+      <tr style="border-top:1px solid var(--line);vertical-align:top;">
+        <td style="padding:6px 4px;font-weight:700;">${r.driver}${r.shiftIndex>0?` <span style="color:var(--muted);font-weight:400;">(shift ${r.shiftIndex+1})</span>`:''}</td>
+        <td style="padding:6px 4px;">${r.route ? routeShort(r.route) : '—'}</td>
+        <td style="padding:6px 4px;">${r.vehicle || '—'}</td>
+        <td style="padding:6px 4px;">
+          ${r.pretripDone ? `<span style="color:var(--success);font-weight:700;">✓ Done</span>` : `<span style="color:var(--muted);">Not yet</span>`}
+          ${r.pretripIssues.length ? `<div style="color:var(--alert-red);font-size:10.5px;margin-top:2px;">${r.pretripIssues.map(i=>`${i.item}${i.note?': '+i.note:''}`).join('; ')}</div>` : ''}
+          ${r.pretripDamage ? `<div style="color:var(--alert-red);font-size:10.5px;margin-top:2px;">⚠ Damage: ${r.pretripDamageNote||'(no note)'}</div>` : ''}
+        </td>
+        <td style="padding:6px 4px;">
+          ${r.posttripDone ? `<span style="color:var(--success);font-weight:700;">✓ Done</span>` : `<span style="color:var(--muted);">Not yet</span>`}
+          ${r.posttripIssues.length ? `<div style="color:var(--alert-red);font-size:10.5px;margin-top:2px;">${r.posttripIssues.map(i=>`${i.question}${i.note?': '+i.note:''}`).join('; ')}</div>` : ''}
+        </td>
+      </tr>`).join('')}
+    </table></div>`;
+  }
   function firstSignInsByDriver(signIns){
     const byDriver = {};
     signIns.forEach(s=>{
@@ -2501,28 +2582,32 @@
   ];
   function computeRouteSummary(routeKey, trips){
     const routeTrips = trips.filter(t=>t.route===routeKey);
-    let going=0, coming=0, hasOverflow=false, routeChange=null;
+    let going=0, coming=0, hasOverflow=false, routeChange=null, flaggedCount=0;
     const events = [];
     let latestDriver = null, latestTs = null;
     routeTrips.forEach(t=>{
       if(t.routeChangeAlert && !t.routeChangeAlert.acknowledged) routeChange = {...t.routeChangeAlert, driver:t.driver, tripId:t.id};
       if(t.departAAMU && t.departMeta){
-        going += t.departGoing||0; coming += t.departComing||0;
+        const g = t.departGoing||0, c = t.departComing||0;
+        const flagged = g > SINGLE_EVENT_SANITY_CAP || c > SINGLE_EVENT_SANITY_CAP;
+        if(flagged) flaggedCount++; else { going += g; coming += c; }
         if(t.departOverflow && !t.departAcknowledged) hasOverflow = true;
-        events.push({ts:t.departMeta.timestamp, time:t.departAAMU, location:"Depart AAMU", going:t.departGoing, coming:t.departComing, note:t.departNote});
+        events.push({ts:t.departMeta.timestamp, time:t.departAAMU, location:"Depart AAMU", going:t.departGoing, coming:t.departComing, note:t.departNote, flagged});
         if(!latestTs || new Date(t.departMeta.timestamp) > new Date(latestTs)){ latestTs = t.departMeta.timestamp; latestDriver = t.driver; }
       }
       t.stops.forEach(s=>{
-        going += s.going||0; coming += s.coming||0;
+        const g = s.going||0, c = s.coming||0;
+        const flagged = g > SINGLE_EVENT_SANITY_CAP || c > SINGLE_EVENT_SANITY_CAP;
+        if(flagged) flaggedCount++; else { going += g; coming += c; }
         if(s.overflow && !s.acknowledged) hasOverflow = true;
         if(s.depart){
-          events.push({ts:s.systemTimestamp, time:s.depart, location:s.name, going:s.going, coming:s.coming, note:s.note});
+          events.push({ts:s.systemTimestamp, time:s.depart, location:s.name, going:s.going, coming:s.coming, note:s.note, flagged});
         }
         if(!latestTs || new Date(s.systemTimestamp) > new Date(latestTs)){ latestTs = s.systemTimestamp; latestDriver = t.driver; }
       });
     });
     events.sort((a,b)=> new Date(b.ts) - new Date(a.ts));
-    return {driver: latestDriver, total: going+coming, hasOverflow, routeChange, events};
+    return {driver: latestDriver, total: going+coming, hasOverflow, routeChange, events, flaggedCount};
   }
   function routeBoxHtml(routeKey, trips){
     const s = computeRouteSummary(routeKey, trips);
@@ -2534,13 +2619,14 @@
         <div class="route-box-title">${ROUTE_BOX_LABEL[routeKey]} <span class="route-box-driver">- Driver: ${s.driver || 'none logged in'}</span></div>
         ${s.routeChange ? `<div style="font-size:11px;color:var(--warn-orange);font-weight:700;">Was assigned ${routeShort(s.routeChange.from)}</div>` : ``}
         <div class="route-box-total${s.hasOverflow?' route-box-total-alert':''}">${s.total} rider${s.total===1?'':'s'} today</div>
+        ${s.flaggedCount ? `<div style="font-size:10px;color:var(--alert-red);font-weight:700;margin:2px 0 4px;">${s.flaggedCount} entry excluded — looks like a data error, see below</div>` : ``}
         <div class="route-box-feed">
           ${shown.length===0 ? '<div class="route-box-empty">No activity yet</div>' :
             shown.map(e=>`
               <div class="route-box-feed-entry">
                 <div class="route-box-feed-time">${e.time}</div>
                 <div>${e.location}</div>
-                <div>${fmtCounts(e.going,e.coming)||'—'}</div>
+                <div${e.flagged?' style="color:var(--alert-red);font-weight:700;"':''}>${fmtCounts(e.going,e.coming)||'—'}${e.flagged?' ⚠':''}</div>
                 ${e.note ? `<div style="font-size:10.5px;color:var(--warn-orange);font-style:italic;margin-top:2px;">"${e.note}"</div>` : ``}
               </div>
             `).join("")}
@@ -2787,6 +2873,60 @@
     statusEl.innerHTML = `<div class="empty-note">Downloaded ${filename} — ${rows.length} rows.</div>`;
   }
 
+  // Storage keys only hold a lowercased driver name (bts-shift-<name>-<date>) — this
+  // recovers a readable display version. Won't always match original capitalization
+  // exactly (e.g. "LeDon" → "Ledon"), but is far more useful than the raw key.
+  function titleCaseFromKey(name){
+    return name.replace(/\b\w/g, c => c.toUpperCase());
+  }
+  async function runPretripExport(){
+    const startVal = document.getElementById("pretrip-export-start-date").value;
+    const endVal = document.getElementById("pretrip-export-end-date").value;
+    const routeVal = document.getElementById("pretrip-export-route").value;
+    const statusEl = document.getElementById("pretrip-export-status");
+    if(!startVal || !endVal){ statusEl.innerHTML = '<div class="empty-note">Pick both a start and end date.</div>'; return; }
+    if(new Date(startVal) > new Date(endVal)){ statusEl.innerHTML = '<div class="empty-note">Start date must be before end date.</div>'; return; }
+    statusEl.innerHTML = '<div class="empty-note">Gathering data…</div>';
+    const dates = dateRangeList(startVal, endVal);
+    const rows = [];
+    let listRes;
+    try{ listRes = await window.storage.list("bts-shift-", true); }catch(e){ listRes = null; }
+    if(!listRes || !listRes.keys){ statusEl.innerHTML = '<div class="empty-note">No pre-trip data found.</div>'; return; }
+    for(const dateStr of dates){
+      const dateKeys = listRes.keys.filter(k => k.length > dateStr.length && k.slice(-(dateStr.length+1)) === "-"+dateStr);
+      for(const key of dateKeys){
+        let rec;
+        try{ const r = await window.storage.get(key, true); rec = JSON.parse(r.value); }catch(e){ continue; }
+        const driverRaw = key.replace(/^bts-shift-/, "").slice(0, -(dateStr.length+1));
+        const driverName = titleCaseFromKey(driverRaw);
+        const shiftsArr = rec.shifts ? rec.shifts : [rec];
+        shiftsArr.forEach(sh=>{
+          if(!sh.pretrip || !sh.pretrip.done) return;
+          if(routeVal !== "all" && sh.pretrip.route !== routeVal) return;
+          const badItems = (sh.pretrip.checklist||[]).filter(c=>c.status==='bad');
+          rows.push({
+            Date: dateStr, Driver: driverName, Route: routeShort(sh.pretrip.route),
+            Vehicle: sh.pretrip.vehicle || "", Capacity: sh.pretrip.capacity || "",
+            "Starting Mileage": sh.pretrip.startingMileage || "",
+            "Starting Fuel/Charge": sh.pretrip.startingFuel || "",
+            "Completed At": sh.pretrip.completedAt ? new Date(sh.pretrip.completedAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}) : "",
+            "Issues Reported": badItems.length,
+            "Issue Details": badItems.map(b=>`${b.item}: ${b.note||"(no note)"}`).join(" | "),
+            "Damage Reported": sh.pretrip.damage ? (sh.pretrip.damage.reported ? "Yes" : "No") : "N/A",
+            "Damage Explanation": (sh.pretrip.damage && sh.pretrip.damage.reported) ? sh.pretrip.damage.explain : ""
+          });
+        });
+      }
+    }
+    if(rows.length===0){ statusEl.innerHTML = '<div class="empty-note">No pre-trip data found for that range.</div>'; return; }
+    const ws2 = XLSX.utils.json_to_sheet(rows);
+    const wb2 = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb2, ws2, "Pre-Trip");
+    const filename2 = `BTS-PreTrip-${startVal}-to-${endVal}.xlsx`;
+    XLSX.writeFile(wb2, filename2);
+    statusEl.innerHTML = `<div class="empty-note">Downloaded ${filename2} — ${rows.length} rows.</div>`;
+  }
+
   async function runLogSearch(){
     const dateVal = document.getElementById("search-date").value;
     const routeVal = document.getElementById("search-route").value;
@@ -2816,13 +2956,51 @@
     state.lastSearch = {dateVal, routeVal, html};
     resultsBox.innerHTML = html;
   }
+  async function runPretripLookup(){
+    const dateVal = document.getElementById("pretrip-lookup-date").value;
+    const resultsBox = document.getElementById("pretrip-lookup-results");
+    if(!dateVal){ resultsBox.innerHTML = '<div class="empty-note">Pick a date to look up.</div>'; return; }
+    resultsBox.innerHTML = '<div class="empty-note">Looking up…</div>';
+    const rows = await loadPretripPosttripStatus(dateVal);
+    const html = pretripPosttripRowsHtml(rows);
+    state.pretripPosttripLookup = {dateVal, html};
+    resultsBox.innerHTML = html;
+  }
 
+  // A single stop or campus departure reporting more than this many boarding/exiting
+  // in one event is almost certainly a stepper mis-click or data error, not real —
+  // exclude it from the total and flag it rather than letting it distort the whole day.
+  const SINGLE_EVENT_SANITY_CAP = 100;
+  function sumTripEvents(trips){
+    const result = {going:0, coming:0, leftBehind:0, flagged:[]};
+    trips.forEach(t=>{
+      if(t.departAAMU){
+        const g = t.departGoing||0, c = t.departComing||0;
+        if(g > SINGLE_EVENT_SANITY_CAP || c > SINGLE_EVENT_SANITY_CAP){
+          result.flagged.push({route: routeShort(t.route), driver:t.driver, location:"Depart AAMU", going:g, coming:c});
+        } else {
+          result.going += g; result.coming += c; result.leftBehind += (t.departLeftBehind||0);
+        }
+      }
+      t.stops.forEach(x=>{
+        const g = x.going||0, c = x.coming||0;
+        if(g > SINGLE_EVENT_SANITY_CAP || c > SINGLE_EVENT_SANITY_CAP){
+          result.flagged.push({route: routeShort(t.route), driver:t.driver, location:x.name, going:g, coming:c});
+        } else {
+          result.going += g; result.coming += c; result.leftBehind += (x.leftBehind||0);
+        }
+      });
+    });
+    return result;
+  }
   function renderDispatch(issues){
     const trips = state.day.trips;
-    const simplifiedPassengers = state.simplifiedRoutePassengers || {total:0, byRoute:{}};
-    const going = trips.reduce((s,t)=>s+(t.departGoing||0)+t.stops.reduce((a,x)=>a+(x.going||0),0),0) + simplifiedPassengers.total;
-    const coming = trips.reduce((s,t)=>s+(t.departComing||0)+t.stops.reduce((a,x)=>a+(x.coming||0),0),0);
-    const leftBehind = trips.reduce((s,t)=>s+(t.departLeftBehind||0)+t.stops.reduce((a,x)=>a+(x.leftBehind||0),0),0);
+    const simplifiedPassengers = state.simplifiedRoutePassengers || {total:0, byRoute:{}, flagged:[]};
+    const tripSums = sumTripEvents(trips);
+    const going = tripSums.going + simplifiedPassengers.total;
+    const coming = tripSums.coming;
+    const leftBehind = tripSums.leftBehind;
+    const allFlagged = [...tripSums.flagged, ...(simplifiedPassengers.flagged||[]).map(f=>({route:routeShort(f.route), location:"Post-Trip total", going:f.count, coming:null}))];
     const openAlerts = [];
     const routeChanges = [];
     trips.forEach(t=>{
@@ -2905,6 +3083,15 @@
           <div id="search-results" style="margin-top:12px;">${state.lastSearch ? state.lastSearch.html : ''}</div>
         </div>
         <div class="card">
+          <div class="card-label">Look Up Pre-Trip / Post-Trip</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">See every driver's pre-trip and post-trip status for any past day — issues, damage reports, and all.</div>
+          <div class="field-row">
+            <div class="field"><label>Date</label><input type="date" id="pretrip-lookup-date" value="${state.pretripPosttripLookup?state.pretripPosttripLookup.dateVal:todayKey()}"></div>
+          </div>
+          <button class="btn btn-primary btn-small" id="pretrip-lookup-btn" style="width:auto;">Look Up</button>
+          <div id="pretrip-lookup-results" style="margin-top:12px;">${state.pretripPosttripLookup ? state.pretripPosttripLookup.html : ''}</div>
+        </div>
+        <div class="card">
           <div class="card-label">Export Ridership Data</div>
           <div class="field-row">
             <div class="field"><label>Start Date</label><input type="date" id="export-start-date" value="${todayKey()}"></div>
@@ -2918,6 +3105,22 @@
           </div>
           <button class="btn btn-primary btn-small" id="export-btn" style="width:auto;">Export to Excel</button>
           <div id="export-status" style="margin-top:8px;"></div>
+        </div>
+        <div class="card">
+          <div class="card-label">Export Pre-Trip Records</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">One row per driver's pre-trip inspection, per day — vehicle, starting mileage/fuel, any issues reported, and any damage reported.</div>
+          <div class="field-row">
+            <div class="field"><label>Start Date</label><input type="date" id="pretrip-export-start-date" value="${todayKey()}"></div>
+            <div class="field"><label>End Date</label><input type="date" id="pretrip-export-end-date" value="${todayKey()}"></div>
+            <div class="field"><label>Route</label>
+              <select id="pretrip-export-route">
+                <option value="all">All Routes</option>
+                ${Object.keys(ROUTES).map(k=>`<option value="${k}">${routeShort(k)}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-small" id="pretrip-export-btn" style="width:auto;">Export to Excel</button>
+          <div id="pretrip-export-status" style="margin-top:8px;"></div>
         </div>
         <div class="card">
           <div class="card-label">Search Driver Sign-Ins</div>
@@ -2936,6 +3139,13 @@
             <div class="card">
               <div class="card-label">Total Riders Today</div>
               <div style="font-size:40px;font-weight:800;color:var(--maroon);text-align:center;">${going+coming}</div>
+              ${allFlagged.length ? `
+              <div style="margin-top:8px;background:#FDF1EF;border:1.5px solid var(--alert-red);border-radius:8px;padding:8px 10px;font-size:11px;color:#7A2318;">
+                <strong>${allFlagged.length} entr${allFlagged.length===1?'y':'ies'} excluded from this total</strong> — looks like a data-entry error, not real riders. Check with the driver and correct it in Look Up.
+                <ul style="margin:6px 0 0 16px;padding:0;">
+                  ${allFlagged.map(f=>`<li>${f.route}${f.driver?' ('+f.driver+')':''} — ${f.location}: ${f.going!=null?'Going '+f.going:''}${f.going!=null&&f.coming!=null?', ':''}${f.coming!=null?'Coming '+f.coming:''}</li>`).join('')}
+                </ul>
+              </div>` : ``}
             </div>
             <div class="card">
               <div class="card-label">Open Overflow Alerts</div>
@@ -2980,6 +3190,11 @@
               })()}
             </div>
             <div class="card">
+              <div class="card-label">Pre-Trip / Post-Trip Completions Today</div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Every driver who's signed in today, and whether their pre-trip and post-trip are done — issues and damage reports shown right here.</div>
+              ${pretripPosttripRowsHtml(state.pretripPosttripToday || [])}
+            </div>
+            <div class="card">
               <div class="card-label">Reset a Driver PIN</div>
               <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">This clears their PIN only — it doesn't show or set what it becomes. They'll pick a new one next time they sign in.</div>
               <div class="field-row">
@@ -3020,7 +3235,9 @@
     document.getElementById("tab-map-btn").onclick = () => { state.dispatchTab = 'map'; renderDispatch(state.lastIssues); };
     if(state.dispatchTab === 'map') initBusMap();
     document.getElementById("search-btn").onclick = runLogSearch;
+    document.getElementById("pretrip-lookup-btn").onclick = runPretripLookup;
     document.getElementById("export-btn").onclick = runRidershipExport;
+    document.getElementById("pretrip-export-btn").onclick = runPretripExport;
     document.getElementById("signin-search-btn").onclick = runSignInSearch;
     document.getElementById("consolidated-search-btn").onclick = runConsolidatedSearch;
     document.getElementById("consolidated-export-btn").onclick = runConsolidatedExport;

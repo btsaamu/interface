@@ -1711,6 +1711,7 @@ function renderWeek(){
         <div style="font-weight:800;font-size:12.5px;color:var(--maroon-dark);margin-bottom:4px;">Apply to live schedule</div>
         <div style="font-size:11.5px;color:#8a7d76;margin-bottom:8px;">Makes this the real, active schedule — use this once the week is final, not while you're still adjusting it.</div>
         <button class="addbtn" id="planApply" style="width:100%;">Apply this plan to the live schedule</button>
+        <div id="planApplyStatus" style="margin-top:6px;font-size:11.5px;font-weight:700;"></div>
       </div>
     </div>
     <p class="note" id="planPreviewStatus" style="margin-top:10px;">${previewStatusHtml}</p>`;
@@ -1905,7 +1906,15 @@ function renderWeek(){
     renderWeek();
   };
   document.getElementById('planApply').onclick = ()=>{
+    const statusEl = document.getElementById('planApplyStatus');
     const overrides = DATA.weekOverrides[planSelectedMonday];
+    const hasRouteChanges = overrides && Object.keys(overrides).some(k=>k!=='__holidays');
+    const hasHolidayChanges = overrides && overrides.__holidays && Object.keys(overrides.__holidays).length>0;
+    if(!overrides || (!hasRouteChanges && !hasHolidayChanges)){
+      statusEl.style.color = 'var(--danger)';
+      statusEl.textContent = '✗ Nothing staged for this week — make a change above first, then apply.';
+      return;
+    }
     if(overrides){
       Object.keys(overrides).forEach(routeName=>{
         if(routeName === '__holidays') return;
@@ -1938,6 +1947,10 @@ function renderWeek(){
       delete DATA.weekOverrides[planSelectedMonday];
     }
     saveData(); renderAll();
+    setTimeout(()=>{
+      const el = document.getElementById('planApplyStatus');
+      if(el){ el.style.color = 'var(--success)'; el.textContent = `✓ Applied — the week of ${fmtDate(planSelectedMonday)} is now live.`; }
+    }, 50);
   };
 }
 
