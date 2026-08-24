@@ -2357,19 +2357,33 @@
       }
     });
   }
+  let dispatchRefreshInFlight = false;
   async function refreshDispatch(){
-    const res = await loadDayForWrite();
-    if(res.ok){ state.day = res.data; state.lastKnownDay = res.data; }
-    else { state.day = state.lastKnownDay; }
-    const issues = await loadVehicleIssues();
-    state.lastIssues = issues;
-    state.lastSignIns = await loadDriverSignIns();
-    state.simplifiedRoutePassengers = await loadSimplifiedRoutePassengers();
-    state.pretripPosttripToday = await loadPretripPosttripStatus();
-    if(state.dispatchTab === 'map' && busMapInstance) return; // don't tear down the live map's DOM every 5s
-    const preserved = captureDispatchInputs();
-    renderDispatch(issues);
-    restoreDispatchInputs(preserved);
+    if(dispatchRefreshInFlight) return; // a previous cycle is still running — skip rather than stack up
+    dispatchRefreshInFlight = true;
+    try{
+      const res = await loadDayForWrite();
+      if(res.ok){ state.day = res.data; state.lastKnownDay = res.data; }
+      else { state.day = state.lastKnownDay; }
+      const dateStr = todayKey();
+      const records = await fetchTodayShiftRecords(dateStr); // the one, only fetch this cycle
+      const [issues, signIns, simplifiedPassengers, pretripPosttrip] = await Promise.all([
+        loadVehicleIssues(records),
+        loadDriverSignIns(dateStr, records),
+        loadSimplifiedRoutePassengers(dateStr, records),
+        loadPretripPosttripStatus(dateStr, records)
+      ]);
+      state.lastIssues = issues;
+      state.lastSignIns = signIns;
+      state.simplifiedRoutePassengers = simplifiedPassengers;
+      state.pretripPosttripToday = pretripPosttrip;
+      if(state.dispatchTab === 'map' && busMapInstance) return; // don't tear down the live map's DOM every 5s
+      const preserved = captureDispatchInputs();
+      renderDispatch(issues);
+      restoreDispatchInputs(preserved);
+    } finally {
+      dispatchRefreshInFlight = false;
+    }
   }
 
   // Sums Post-Trip "Total Passengers" from on-campus and Trips routes (which don't log
@@ -2380,135 +2394,116 @@
   // the total rather than letting one bad entry silently distort the whole day's count,
   // and surface it so dispatch can go verify/correct the actual figure with the driver.
   const SINGLE_SHIFT_SANITY_CAP = 150;
-  async function loadPretripPosttripStatus(dateStr){
+  // Fetches every shift record for a given date ONCE, in parallel, instead of each of
+  // the four dispatch panels below doing their own separate list-then-sequential-fetch
+  // scan. That old pattern meant up to 4x the network round-trips per 5-second poll,
+  // done one at a time — the more shift records accumulate over the school year, the
+  // slower and more overlap-prone every single poll cycle gets.
+  let shiftRecordsCache = null, shiftRecordsCacheKey = null;
+  async function fetchTodayShiftRecords(dateStr){
     dateStr = dateStr || todayKey();
-    const rows = [];
+    if(shiftRecordsCacheKey === dateStr && shiftRecordsCache) return shiftRecordsCache;
+    const out = [];
     try{
       const listRes = await window.storage.list("bts-shift-", true);
-      if(!listRes || !listRes.keys) return rows;
+      if(!listRes || !listRes.keys) return out;
       const seen = new Set();
       const dateKeys = listRes.keys.filter(k=>{
         if(seen.has(k)) return false;
         seen.add(k);
         return k.length > dateStr.length && k.slice(-(dateStr.length+1)) === "-"+dateStr;
       });
-      for(const key of dateKeys){
+      const fetched = await Promise.all(dateKeys.map(async key=>{
         try{
           const r = await window.storage.get(key, true);
-          if(!r) continue;
+          if(!r) return null;
           const rec = JSON.parse(r.value);
           const driverRaw = key.replace(/^bts-shift-/, "").slice(0, -(dateStr.length+1));
-          const driverName = titleCaseFromKey(driverRaw);
-          const shiftsArr = rec.shifts ? rec.shifts : [rec];
-          shiftsArr.forEach((sh,idx)=>{
-            const pretripBad = sh.pretrip ? (sh.pretrip.checklist||[]).filter(c=>c.status==='bad') : [];
-            const posttripBad = sh.posttrip ? (sh.posttrip.answers||[]).filter(a=>a.answer==='yes') : [];
-            rows.push({
-              driver: driverName, shiftIndex: idx,
-              route: sh.pretrip ? sh.pretrip.route : null,
-              vehicle: sh.pretrip ? sh.pretrip.vehicle : null,
-              pretripDone: !!(sh.pretrip && sh.pretrip.done),
-              pretripIssues: pretripBad,
-              pretripDamage: !!(sh.pretrip && sh.pretrip.damage && sh.pretrip.damage.reported),
-              pretripDamageNote: sh.pretrip && sh.pretrip.damage ? sh.pretrip.damage.explain : "",
-              posttripDone: !!(sh.posttrip && sh.posttrip.done),
-              posttripIssues: posttripBad
-            });
-          });
-        }catch(e){}
-      }
+          return { key, driverRaw, driverName: titleCaseFromKey(driverRaw), rec };
+        }catch(e){ return null; }
+      }));
+      fetched.forEach(f=>{ if(f) out.push(f); });
     }catch(e){}
+    shiftRecordsCache = out; shiftRecordsCacheKey = dateStr;
+    return out;
+  }
+  function invalidateShiftRecordsCache(){ shiftRecordsCache = null; shiftRecordsCacheKey = null; }
+
+  async function loadPretripPosttripStatus(dateStr, preFetched){
+    dateStr = dateStr || todayKey();
+    const rows = [];
+    const records = preFetched || await fetchTodayShiftRecords(dateStr);
+    records.forEach(({driverName, rec})=>{
+      const shiftsArr = rec.shifts ? rec.shifts : [rec];
+      shiftsArr.forEach((sh,idx)=>{
+        const pretripBad = sh.pretrip ? (sh.pretrip.checklist||[]).filter(c=>c.status==='bad') : [];
+        const posttripBad = sh.posttrip ? (sh.posttrip.answers||[]).filter(a=>a.answer==='yes') : [];
+        rows.push({
+          driver: driverName, shiftIndex: idx,
+          route: sh.pretrip ? sh.pretrip.route : null,
+          vehicle: sh.pretrip ? sh.pretrip.vehicle : null,
+          pretripDone: !!(sh.pretrip && sh.pretrip.done),
+          pretripIssues: pretripBad,
+          pretripDamage: !!(sh.pretrip && sh.pretrip.damage && sh.pretrip.damage.reported),
+          pretripDamageNote: sh.pretrip && sh.pretrip.damage ? sh.pretrip.damage.explain : "",
+          posttripDone: !!(sh.posttrip && sh.posttrip.done),
+          posttripIssues: posttripBad
+        });
+      });
+    });
     rows.sort((a,b)=> a.driver.localeCompare(b.driver) || a.shiftIndex - b.shiftIndex);
     return rows;
   }
-  async function loadSimplifiedRoutePassengers(dateStr){
+  async function loadSimplifiedRoutePassengers(dateStr, preFetched){
     dateStr = dateStr || todayKey();
     const result = {total: 0, byRoute: {}, flagged: []};
-    try{
-      const listRes = await window.storage.list("bts-shift-", true);
-      if(!listRes || !listRes.keys) return result;
-      const seen = new Set();
-      const todayKeys = listRes.keys.filter(k=>{
-        if(seen.has(k)) return false; // guard against any duplicate entries in the returned list
-        seen.add(k);
-        // Strict match: the key must end in exactly "-<dateStr>", not just contain it —
-        // avoids any chance of a loosely-matching key pulling in the wrong day.
-        return k.length > dateStr.length && k.slice(-(dateStr.length+1)) === "-"+dateStr;
+    const records = preFetched || await fetchTodayShiftRecords(dateStr);
+    records.forEach(({key, rec})=>{
+      const shiftsArr = rec.shifts ? rec.shifts : [rec];
+      shiftsArr.forEach(sh=>{
+        if(sh.posttrip && typeof sh.posttrip.totalPassengers === 'number'){
+          const n = sh.posttrip.totalPassengers;
+          const routeKey = sh.pretrip && sh.pretrip.route;
+          if(n > SINGLE_SHIFT_SANITY_CAP){
+            result.flagged.push({key, route: routeKey, driver: sh.pretrip && sh.pretrip.vehicle, count: n});
+            return; // excluded from the total — likely a data-entry error
+          }
+          result.total += n;
+          if(routeKey) result.byRoute[routeKey] = (result.byRoute[routeKey]||0) + n;
+        }
       });
-      for(const key of todayKeys){
-        try{
-          const r = await window.storage.get(key, true);
-          if(!r) continue;
-          const rec = JSON.parse(r.value);
-          const shiftsArr = rec.shifts ? rec.shifts : [rec];
-          shiftsArr.forEach(sh=>{
-            if(sh.posttrip && typeof sh.posttrip.totalPassengers === 'number'){
-              const n = sh.posttrip.totalPassengers;
-              const routeKey = sh.pretrip && sh.pretrip.route;
-              if(n > SINGLE_SHIFT_SANITY_CAP){
-                result.flagged.push({key, route: routeKey, driver: sh.pretrip && sh.pretrip.vehicle, count: n});
-                return; // excluded from the total — likely a data-entry error
-              }
-              result.total += n;
-              if(routeKey) result.byRoute[routeKey] = (result.byRoute[routeKey]||0) + n;
-            }
-          });
-        }catch(e){}
-      }
-    }catch(e){}
+    });
     return result;
   }
 
-  async function loadDriverSignIns(dateStr){
+  async function loadDriverSignIns(dateStr, preFetched){
     dateStr = dateStr || todayKey();
-    try{
-      const listRes = await window.storage.list("bts-shift-", true);
-      if(!listRes || !listRes.keys) return [];
-      const suffix = "-"+dateStr;
-      const dateKeys = listRes.keys.filter(k=>k.endsWith(suffix));
-      const signIns = [];
-      for(const key of dateKeys){
-        try{
-          const r = await window.storage.get(key, true);
-          if(!r) continue;
-          const rec = JSON.parse(r.value);
-          const driverName = key.replace("bts-shift-","").replace(suffix,"");
-          if(rec.loginLog && rec.loginLog.length){
-            rec.loginLog.forEach(l=> signIns.push({driver:driverName, timestamp:l.timestamp, lat:l.lat, lng:l.lng, gpsError:l.gpsError}));
-          }
-        }catch(e){}
+    const signIns = [];
+    const records = preFetched || await fetchTodayShiftRecords(dateStr);
+    records.forEach(({driverRaw, rec})=>{
+      if(rec.loginLog && rec.loginLog.length){
+        rec.loginLog.forEach(l=> signIns.push({driver:driverRaw, timestamp:l.timestamp, lat:l.lat, lng:l.lng, gpsError:l.gpsError}));
       }
-      signIns.sort((a,b)=> new Date(a.timestamp) - new Date(b.timestamp));
-      return signIns;
-    }catch(e){ return []; }
+    });
+    signIns.sort((a,b)=> new Date(a.timestamp) - new Date(b.timestamp));
+    return signIns;
   }
 
-  async function loadVehicleIssues(){
-    try{
-      const listRes = await window.storage.list("bts-shift-", true);
-      if(!listRes || !listRes.keys) return [];
-      const suffix = "-"+todayKey();
-      const todayKeys = listRes.keys.filter(k=>k.endsWith(suffix));
-      const issues = [];
-      for(const key of todayKeys){
-        try{
-          const r = await window.storage.get(key, true);
-          if(!r) continue;
-          const rec = JSON.parse(r.value);
-          const driverName = key.replace("bts-shift-","").replace(suffix,"");
-          const shiftsArr = rec.shifts ? rec.shifts : [rec];
-          shiftsArr.forEach(sh=>{
-            if(sh.pretrip && sh.pretrip.checklist){
-              sh.pretrip.checklist.filter(c=>c.status==='bad').forEach(c=> issues.push({driver:driverName, phase:'Pre-Trip', item:c.item, note:c.note}));
-            }
-            if(sh.posttrip && sh.posttrip.answers){
-              sh.posttrip.answers.filter(a=>a.answer==='yes').forEach(a=> issues.push({driver:driverName, phase:'Post-Trip', item:a.question, note:a.note}));
-            }
-          });
-        }catch(e){}
-      }
-      return issues;
-    }catch(e){ return []; }
+  async function loadVehicleIssues(preFetched){
+    const issues = [];
+    const records = preFetched || await fetchTodayShiftRecords(todayKey());
+    records.forEach(({driverRaw, rec})=>{
+      const shiftsArr = rec.shifts ? rec.shifts : [rec];
+      shiftsArr.forEach(sh=>{
+        if(sh.pretrip && sh.pretrip.checklist){
+          sh.pretrip.checklist.filter(c=>c.status==='bad').forEach(c=> issues.push({driver:driverRaw, phase:'Pre-Trip', item:c.item, note:c.note}));
+        }
+        if(sh.posttrip && sh.posttrip.answers){
+          sh.posttrip.answers.filter(a=>a.answer==='yes').forEach(a=> issues.push({driver:driverRaw, phase:'Post-Trip', item:a.question, note:a.note}));
+        }
+      });
+    });
+    return issues;
   }
 
   function fmtGeo(lat,lng,gpsError){
