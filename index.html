@@ -2493,7 +2493,8 @@
           pretripDamage: !!(sh.pretrip && sh.pretrip.damage && sh.pretrip.damage.reported),
           pretripDamageNote: sh.pretrip && sh.pretrip.damage ? sh.pretrip.damage.explain : "",
           posttripDone: !!(sh.posttrip && sh.posttrip.done),
-          posttripIssues: posttripBad
+          posttripIssues: posttripBad,
+          totalPassengers: (sh.posttrip && typeof sh.posttrip.totalPassengers === 'number') ? sh.posttrip.totalPassengers : null
         });
       });
     });
@@ -2560,9 +2561,12 @@
 
   function pretripPosttripRowsHtml(rows){
     if(rows.length===0) return '<div class="empty-note">No drivers signed in.</div>';
-    return `<div style="overflow-x:auto;"><table style="width:100%;font-size:12px;border-collapse:collapse;min-width:600px;">
+    const totalRiders = rows.reduce((s,r)=> s + (r.totalPassengers||0), 0);
+    return `<div style="overflow-x:auto;">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Total riders across these rows: <strong style="color:var(--maroon-dark);">${totalRiders}</strong></div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse;min-width:650px;">
       <tr style="text-align:left;color:var(--muted);font-size:10px;text-transform:uppercase;">
-        <th style="padding:4px;">Driver</th><th style="padding:4px;">Route</th><th style="padding:4px;">Vehicle</th><th style="padding:4px;">Pre-Trip</th><th style="padding:4px;">Post-Trip</th>
+        <th style="padding:4px;">Driver</th><th style="padding:4px;">Route</th><th style="padding:4px;">Vehicle</th><th style="padding:4px;">Pre-Trip</th><th style="padding:4px;">Post-Trip</th><th style="padding:4px;">Riders</th>
       </tr>
       ${rows.map(r=>`
       <tr style="border-top:1px solid var(--line);vertical-align:top;">
@@ -2578,6 +2582,7 @@
           ${r.posttripDone ? `<span style="color:var(--success);font-weight:700;">✓ Done</span>` : `<span style="color:var(--muted);">Not yet</span>`}
           ${r.posttripIssues.length ? `<div style="color:var(--alert-red);font-size:10.5px;margin-top:2px;">${r.posttripIssues.map(i=>`${i.question}${i.note?': '+i.note:''}`).join('; ')}</div>` : ''}
         </td>
+        <td style="padding:6px 4px;font-weight:800;color:var(--maroon-dark);font-size:14px;">${r.totalPassengers!=null ? r.totalPassengers : '<span style="color:var(--muted);font-weight:400;font-size:11px;">—</span>'}</td>
       </tr>`).join('')}
     </table></div>`;
   }
@@ -2954,7 +2959,8 @@
             "Issues Reported": badItems.length,
             "Issue Details": badItems.map(b=>`${b.item}: ${b.note||"(no note)"}`).join(" | "),
             "Damage Reported": sh.pretrip.damage ? (sh.pretrip.damage.reported ? "Yes" : "No") : "N/A",
-            "Damage Explanation": (sh.pretrip.damage && sh.pretrip.damage.reported) ? sh.pretrip.damage.explain : ""
+            "Damage Explanation": (sh.pretrip.damage && sh.pretrip.damage.reported) ? sh.pretrip.damage.explain : "",
+            "Total Passengers": (sh.posttrip && typeof sh.posttrip.totalPassengers === 'number') ? sh.posttrip.totalPassengers : ""
           });
         });
       }
@@ -3149,7 +3155,7 @@
         </div>
         <div class="card">
           <div class="card-label">Export Pre-Trip Records</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">One row per driver's pre-trip inspection, per day — vehicle, starting mileage/fuel, any issues reported, and any damage reported.</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">One row per driver's pre-trip inspection, per day — vehicle, starting mileage/fuel, any issues reported, any damage reported, and total riders for the shift. This is the record to use for on-campus route ridership, since those routes don't log per-stop trips the way off-campus routes do.</div>
           <div class="field-row">
             <div class="field"><label>Start Date</label><input type="date" id="pretrip-export-start-date" value="${todayKey()}"></div>
             <div class="field"><label>End Date</label><input type="date" id="pretrip-export-end-date" value="${todayKey()}"></div>
