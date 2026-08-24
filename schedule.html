@@ -430,8 +430,16 @@ const AVAILABILITY = {
 function migrateData(d){
   d.routes = d.routes.filter(r=>{
     if(r.name==="Bulldog 2") return false;
-    if(r.name==="Bulldog 1" && !r.shifts2) return false;
     return true;
+  });
+  // Backfill splitEligible onto these routes by name — a route saved before this flag
+  // existed (Bulldog 1 predates it; Floater doesn't, which is why only Floater showed
+  // split-shift buttons) would otherwise never get it just by loading new code, since
+  // saved data always overrides the defaults wholesale. Anything depending on this flag
+  // needs it set correctly regardless of when the route was first created.
+  const SPLIT_ELIGIBLE_ROUTE_NAMES = ["Drake","Bulldog 1","Paratransit","Normal Hills","Floater"];
+  d.routes.forEach(r=>{
+    if(SPLIT_ELIGIBLE_ROUTE_NAMES.includes(r.name)) r.splitEligible = true;
   });
   // Clean up stale data from a fixed bug: a day promoted to split-shift could be left with
   // BOTH a shifts2 entry and its old single-shift entry, double-counting that day's hours.
