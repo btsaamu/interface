@@ -943,7 +943,13 @@
   document.getElementById("pick-dispatch").onclick = () => enterRole("dispatch");
   document.getElementById("bts-switch-role").onclick = () => logoutDriver();
 
+  const persistedDriverOnLoad = localStorage.getItem("bts-active-driver");
+  if(persistedDriverOnLoad){
+    enterRole("driver");
+  }
+
   function logoutDriver(){
+    localStorage.removeItem("bts-active-driver");
     if(state.pollHandle) clearInterval(state.pollHandle);
     state.role = null; state.driverLock = {status:'locked', name:'', vehicle:''};
     state.myTrip = null; state.myCompletedTrips = [];
@@ -963,7 +969,12 @@
     if(role === "driver"){
       roleLabel.textContent = "Driver Log";
       driverView.style.display = "block";
-      renderDriverGate();
+      const persistedDriver = localStorage.getItem("bts-active-driver");
+      if(persistedDriver){
+        await unlockDriver(persistedDriver);
+      } else {
+        renderDriverGate();
+      }
     } else {
       roleLabel.textContent = "Dispatch Dashboard";
       dispatchView.style.display = "block";
@@ -1145,6 +1156,7 @@
   }
 
   async function unlockDriver(name){
+    localStorage.setItem("bts-active-driver", name);
     state.driverLock = {status:'unlocked', name, vehicle:''};
     const profile = await loadDriverProfile();
     state.driverLock.vehicle = profile.vehicle || "";
