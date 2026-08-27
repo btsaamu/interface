@@ -316,21 +316,21 @@
 (function(){
   const DEFAULT_CAPACITY = 14;
   const ROUTES = {
-    dean:         {label:"Dean", category:"Day", stops:["Dean"], schedule:{startHour:7, endHour:18, legs:[
+    dean:         {label:"Dean", category:"Day", stops:["Dean"], allowExtraStops:true, schedule:{startHour:7, endHour:18, legs:[
                       {label:"Depart AAMU",offset:20},{label:"Arrive Dean",offset:30},{label:"Depart Dean",offset:35},{label:"Arrive AAMU",offset:45}]}},
-    waterleaf:    {label:"Waterleaf", category:"Day", stops:["Waterleaf"], schedule:{startHour:7, endHour:18, legs:[
+    waterleaf:    {label:"Waterleaf", category:"Day", stops:["Waterleaf"], allowExtraStops:true, schedule:{startHour:7, endHour:18, legs:[
                       {label:"Depart AAMU",offset:20},{label:"Arrive Waterleaf",offset:35},{label:"Depart Waterleaf",offset:40},{label:"Arrive AAMU",offset:55}]}},
-    elroy:        {label:"Elroy", category:"Day", stops:["Elroy"], schedule:{startHour:7, endHour:18, legs:[
-                      {label:"Depart AAMU",offset:10},{label:"Arrive Elroy",offset:30},{label:"Depart Elroy",offset:35},{label:"Arrive AAMU",offset:55}]}},
-    hsv_elroy:    {label:"Huntsville Place/Elroy", category:"Day", stops:["Huntsville Place","Elroy"], schedule:{startHour:7, endHour:18, legs:[
-                      {label:"Depart AAMU",offset:0},{label:"Arrive Huntsville Place",offset:15},{label:"Depart Huntsville Place",offset:20},{label:"Arrive Elroy",offset:25},{label:"Depart Elroy",offset:30},{label:"Arrive AAMU",offset:50}]}},
-    west_night:   {label:"West Night: HSV PL & Elroy", category:"Night", stops:["Huntsville Place","Elroy"], schedule:{startHour:18, endHour:22, legs:[
-                      {label:"Depart AAMU",offset:20},{label:"Arrive Huntsville Place",offset:40},{label:"Depart Huntsville Place",offset:45},{label:"Arrive Elroy",offset:50},{label:"Depart Elroy",offset:55},{label:"Arrive AAMU",offset:75}]}},
-    east_night:   {label:"East Night: Dean/Waterleaf", category:"Night", stops:["Dean","Waterleaf"], schedule:{startHour:18, endHour:22, legs:[
+    elroy:        {label:"Elroy", category:"Day", stops:["Elroy"], allowExtraStops:true, schedule:{startHour:7, endHour:18, legs:[
+                      {label:"Depart AAMU",offset:5},{label:"Arrive Elroy",offset:25},{label:"Depart Elroy",offset:30},{label:"Arrive AAMU",offset:50}]}},
+    hsv_elroy:    {label:"Huntsville Place/Elroy/Olympia", category:"Day", stops:["Olympia Gardens","Huntsville Place","Elroy"], allowExtraStops:true, schedule:{startHour:6, endHour:18, legs:[
+                      {label:"Depart AAMU",offset:45},{label:"Arrive Olympia Gardens",offset:50},{label:"Depart Olympia Gardens",offset:50},{label:"Arrive Huntsville Place",offset:70},{label:"Depart Huntsville Place",offset:75},{label:"Arrive Elroy",offset:80},{label:"Depart Elroy",offset:80},{label:"Arrive AAMU",offset:100}]}},
+    west_night:   {label:"West Night: Olympia/HSV PL/Elroy", category:"Night", stops:["Olympia Gardens","Huntsville Place","Elroy"], allowExtraStops:true, schedule:{startHour:18, endHour:22, legs:[
+                      {label:"Depart AAMU",offset:15},{label:"Arrive Olympia Gardens",offset:20},{label:"Depart Olympia Gardens",offset:25},{label:"Arrive Huntsville Place",offset:35},{label:"Depart Huntsville Place",offset:40},{label:"Arrive Elroy",offset:45},{label:"Depart Elroy",offset:50},{label:"Arrive AAMU",offset:70}]}},
+    east_night:   {label:"East Night: Dean/Waterleaf", category:"Night", stops:["Dean","Waterleaf"], allowExtraStops:true, schedule:{startHour:18, endHour:22, legs:[
                       {label:"Depart AAMU",offset:20},{label:"Arrive Dean",offset:30},{label:"Depart Dean",offset:35},{label:"Arrive Waterleaf",offset:40},{label:"Depart Waterleaf",offset:45},{label:"Arrive AAMU",offset:60}]}},
-    west_weekend: {label:"West Wknd/Holiday: HSV PL & Elroy", category:"Weekend/Holiday", stops:["Huntsville Place","Elroy"], schedule:{startHour:8, endHour:18, runHours:[8,11,15,17], legs:[
-                      {label:"Depart AAMU",offset:20},{label:"Arrive Huntsville Place",offset:35},{label:"Depart Huntsville Place",offset:40},{label:"Arrive Elroy",offset:45},{label:"Depart Elroy",offset:50},{label:"Arrive AAMU",offset:70}]}},
-    east_weekend: {label:"East Wknd/Holiday: Waterleaf/Dean", category:"Weekend/Holiday", stops:["Waterleaf","Dean"], schedule:{startHour:8, endHour:18, runHours:[8,11,15,17], legs:[
+    west_weekend: {label:"West Wknd/Holiday: Olympia/HSV PL/Elroy", category:"Weekend/Holiday", stops:["Olympia Gardens","Huntsville Place","Elroy"], allowExtraStops:true, schedule:{startHour:8, endHour:18, runHours:[8,11,15,17], legs:[
+                      {label:"Depart AAMU",offset:15},{label:"Arrive Olympia Gardens",offset:20},{label:"Depart Olympia Gardens",offset:20},{label:"Arrive Huntsville Place",offset:35},{label:"Depart Huntsville Place",offset:40},{label:"Arrive Elroy",offset:45},{label:"Depart Elroy",offset:50},{label:"Arrive AAMU",offset:70}]}},
+    east_weekend: {label:"East Wknd/Holiday: Waterleaf/Dean", category:"Weekend/Holiday", stops:["Waterleaf","Dean"], allowExtraStops:true, schedule:{startHour:8, endHour:18, runHours:[8,11,15,17], legs:[
                       {label:"Depart AAMU",offset:20},{label:"Arrive Waterleaf",offset:30},{label:"Depart Waterleaf",offset:35},{label:"Arrive Dean",offset:40},{label:"Depart Dean",offset:45},{label:"Arrive AAMU",offset:60}]}},
     drake:            {label:"Drake", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
     bulldog:          {label:"Bulldog", category:"On-Campus", simplified:true, stops:[], schedule:{startHour:7, endHour:18, legs:[{label:"Depart AAMU",offset:0}]}},
@@ -642,6 +642,7 @@
   function fmtSysTime(iso){ if(!iso) return ""; return new Date(iso).toLocaleTimeString([], {hour:"numeric", minute:"2-digit", second:"2-digit"}); }
   function fmtGeoShort(lat,lng,gpsError){ if(lat==null||lng==null) return `no GPS${gpsError?` (${gpsError})`:''}`; return `${lat.toFixed(4)}, ${lng.toFixed(4)}`; }
   function dayStorageKey(){ return "bts-day-"+todayKey(); }
+  function tripStorageKey(dateStr, tripId){ return "bts-trip-"+dateStr+"-"+tripId; }
 
   function getGeo(){
     return new Promise(resolve=>{
@@ -656,20 +657,34 @@
   }
 
   // ---- storage helpers ----
+  // Trips for a day are stored one-key-per-trip (bts-trip-<date>-<tripId>) rather than
+  // one growing blob for the whole day. Reading merges in any trips still sitting in the
+  // old bts-day-<date> blob format (from before this change, or historical past days),
+  // deduped by trip id, so nothing already logged is lost.
   async function loadDayForWrite(){
     try{
-      const r = await window.storage.get(dayStorageKey(), true);
-      return {data: r ? JSON.parse(r.value) : {trips:[]}, ok:true};
-    }catch(e){
-      // get() throws both when the key genuinely doesn't exist yet (normal on the
-      // first write of a new day) and on a real fetch failure — list() lets us
-      // tell those apart instead of refusing to ever write on day one.
+      const dateStr = todayKey();
+      const listRes = await window.storage.list(tripStorageKey(dateStr, ""), true);
+      const tripKeys = (listRes && listRes.keys) ? listRes.keys : [];
+      const fetched = await Promise.all(tripKeys.map(async key=>{
+        try{ const r = await window.storage.get(key, true); return r ? JSON.parse(r.value) : null; }
+        catch(e){ return null; }
+      }));
+      const tripsById = {};
+      fetched.forEach(t=>{ if(t && t.id) tripsById[t.id] = t; });
+      // Merge in anything still in the legacy blob (older data, or an in-progress trip
+      // from right before this update) that isn't already covered by a per-trip key.
       try{
-        const listRes = await window.storage.list(dayStorageKey(), true);
-        const exists = listRes && listRes.keys && listRes.keys.includes(dayStorageKey());
-        if(!exists) return {data:{trips:[]}, ok:true};
-        return {data:null, ok:false};
-      }catch(e2){ return {data:null, ok:false}; }
+        const legacy = await window.storage.get(dayStorageKey(), true);
+        if(legacy){
+          const raw = JSON.parse(legacy.value);
+          const legacyTrips = Array.isArray(raw.trips) ? raw.trips : Object.values(raw.trips || {});
+          legacyTrips.forEach(t=>{ if(t && t.id && !tripsById[t.id]) tripsById[t.id] = t; });
+        }
+      }catch(e){ /* no legacy blob for today — normal */ }
+      return {data: {trips: Object.values(tripsById)}, ok:true};
+    }catch(e){
+      return {data: state.lastKnownDay || {trips:[]}, ok:false};
     }
   }
   async function loadDayReadOnly(){ const res = await loadDayForWrite(); return res.ok ? res.data : (state.lastKnownDay || {trips:[]}); }
@@ -682,7 +697,15 @@
     }
     return state.lastKnownDay || {trips:[]};
   }
-  async function saveDay(data){ try{ await window.storage.set(dayStorageKey(), JSON.stringify(data), true); return true; } catch(e){ return false; } }
+  async function saveDay(data){
+    try{
+      const dateStr = todayKey();
+      const results = await Promise.all((data.trips||[]).map(t=>
+        window.storage.set(tripStorageKey(dateStr, t.id), JSON.stringify(t), true).then(()=>true).catch(()=>false)
+      ));
+      return results.every(r=>r);
+    }catch(e){ return false; }
+  }
   async function loadDriverProfile(){ try{ const r = await window.storage.get("bts-driver-profile", false); return r ? JSON.parse(r.value) : {}; } catch(e){ return {}; } }
   async function saveDriverProfile(p){ try{ await window.storage.set("bts-driver-profile", JSON.stringify(p), false); }catch(e){} }
   function normalizeName(n){ return (n||"").trim().toLowerCase(); }
@@ -698,7 +721,7 @@
   // Night, which have no equivalent here and are simply left out.
   const MS_ROUTE_KEY = {
     "Dean": "dean", "Waterleaf": "waterleaf", "Elroy": "elroy",
-    "Huntsville Place/Elroy": "hsv_elroy",
+    "Huntsville Place/Elroy/Olympia": "hsv_elroy",
     "East Nights": "east_night", "West Nights": "west_night",
     "East WKND": "east_weekend", "West WKND": "west_weekend",
     "Drake": "drake", "Bulldog 1": "bulldog", "Normal Hills": "normal_hills",
@@ -901,14 +924,19 @@
   function clearPending(id){ state.pendingIds.delete(id); renderPendingBadge(); }
   function getLocalTrip(id){ if(state.myTrip && state.myTrip.id===id) return state.myTrip; return state.myCompletedTrips.find(t=>t.id===id) || null; }
   async function syncTrip(trip){
-    const res = await loadDayForWrite();
-    if(!res.ok){ markPending(trip.id); return false; }
-    const day = res.data;
-    const idx = day.trips.findIndex(x=>x.id===trip.id);
-    if(idx===-1) day.trips.push(trip); else day.trips[idx]=trip;
-    const saved = await saveDay(day);
-    if(saved){ state.lastKnownDay = day; clearPending(trip.id); return true; }
-    markPending(trip.id); return false;
+    try{
+      await window.storage.set(tripStorageKey(todayKey(), trip.id), JSON.stringify(trip), true);
+      // Update the local cache optimistically instead of re-fetching everything —
+      // dispatch's own poll picks up other drivers' trips on its normal cadence.
+      if(!state.lastKnownDay) state.lastKnownDay = {trips:[]};
+      const idx = state.lastKnownDay.trips.findIndex(x=>x.id===trip.id);
+      if(idx===-1) state.lastKnownDay.trips.push(trip); else state.lastKnownDay.trips[idx] = trip;
+      clearPending(trip.id);
+      return true;
+    }catch(e){
+      markPending(trip.id);
+      return false;
+    }
   }
   async function flushPending(){
     if(state.pendingIds.size===0) return;
@@ -927,6 +955,7 @@
     quickStartChecks:{}, pretripDamage:null, routeGridExpanded:false, myWeekExpanded:false, msWeekSchedule:null, tripVehicleType:null, nextWeekExpanded:false, msPreviewWeek:null,
     pretripMileage:'', pretripExplains:{}, damageExplainText:'',
     stopPhase:'arriving', pendingStop:null, divertedName:'',
+    stepperCounts:{going:0, coming:0, leftBehind:0, overflow:false, forPhaseKey:null},
     pendingIds:new Set(), changingRoute:false,
     dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(), lastSignIns:[], lastSignInSearch:null, lastConsolidatedSearch:null, simplifiedRoutePassengers:{total:0, byRoute:{}, flagged:[]}, pretripPosttripToday:[], pretripPosttripLookup:null,
     day:{trips:[]}, lastKnownDay:{trips:[]}, pollHandle:null, flushHandle:null
@@ -1819,10 +1848,24 @@
     wireStopPhase(trip, defaultStopName, cap, route);
   }
 
+  // Ties the passenger counter to a key identifying which stop it belongs to, so a
+  // re-render of the SAME stop (checking the schedule, an error retry, etc.) keeps
+  // whatever the driver already entered, while genuinely moving to a new stop starts fresh.
+  function stepperPhaseKey(trip){
+    return state.stopPhase + ':' + (trip && trip.stops ? trip.stops.length : 0);
+  }
+  function ensureStepperCounts(trip){
+    const key = stepperPhaseKey(trip);
+    if(state.stepperCounts.forPhaseKey !== key){
+      state.stepperCounts = {going:0, coming:0, leftBehind:0, overflow:false, forPhaseKey:key};
+    }
+    return state.stepperCounts;
+  }
   function renderStopPhaseCard(trip, defaultStopName){
     if(state.stopPhase === 'depart_campus'){
       const isWeekendHoliday = ROUTES[trip.route].category === "Weekend/Holiday";
       const showNoPax = isWeekendHoliday && isFinalScheduledRun(trip.route);
+      const sc = ensureStepperCounts(trip);
       return `
         <div class="card">
           <div class="card-label">Departing AAMU</div>
@@ -1834,24 +1877,24 @@
             </div>
             <div class="big-block">
               <div class="big-label">Going to APT</div>
-              <div class="big-stepper" id="stepper-going" data-count="0"><button data-d="-1">−</button><span class="big-num count">0</span><button data-d="1">+</button></div>
+              <div class="big-stepper" id="stepper-going" data-count="${sc.going}"><button data-d="-1">−</button><span class="big-num count">${sc.going}</span><button data-d="1">+</button></div>
             </div>
             <div class="big-block">
               <div class="big-label">Coming to AAMU</div>
-              <div class="big-stepper" id="stepper-coming" data-count="0"><button data-d="-1">−</button><span class="big-num count">0</span><button data-d="1">+</button></div>
+              <div class="big-stepper" id="stepper-coming" data-count="${sc.coming}"><button data-d="-1">−</button><span class="big-num count">${sc.coming}</span><button data-d="1">+</button></div>
             </div>
             <div class="big-block">
               <div class="big-label">Overflow</div>
-              <button class="big-toggle" id="overflow-toggle" data-active="0">NO OVERFLOW</button>
-              <div id="lb-refine" style="display:none;margin-top:8px;">
-                <div class="stepper" id="stepper-lb" data-count="1" style="display:flex;align-items:center;justify-content:center;gap:8px;"><button style="width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:white;" data-d="-1">−</button><span class="count" style="font-weight:800;">1</span><button style="width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:white;" data-d="1">+</button></div>
+              <button class="big-toggle" id="overflow-toggle" data-active="${sc.overflow?1:0}">${sc.overflow?'OVERFLOW':'NO OVERFLOW'}</button>
+              <div id="lb-refine" style="display:${sc.overflow?'block':'none'};margin-top:8px;">
+                <div class="stepper" id="stepper-lb" data-count="${sc.leftBehind||1}" style="display:flex;align-items:center;justify-content:center;gap:8px;"><button style="width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:white;" data-d="-1">−</button><span class="count" style="font-weight:800;">${sc.leftBehind||1}</span><button style="width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:white;" data-d="1">+</button></div>
                 <div style="font-size:10px;color:var(--muted);margin-top:2px;">left behind</div>
               </div>
             </div>
           </div>
           <div class="field" style="margin-bottom:10px;">
             <label style="font-size:10.5px;color:var(--muted);display:block;margin-bottom:4px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;">Note (optional)</label>
-            <input type="text" id="campus-depart-note" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:white;" placeholder="e.g. running late — traffic on University Dr">
+            <input type="text" id="campus-depart-note" value="${(state.pendingCampusDepartNote||'').replace(/"/g,'&quot;')}" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:white;" placeholder="e.g. running late — traffic on University Dr">
           </div>
           <button class="btn btn-primary big-log-btn" id="log-campus-depart-btn">LOG DEPARTURE &amp; CONTINUE</button>
           ${showNoPax ? `<button class="btn btn-outline big-log-btn" id="no-passengers-btn" style="margin-top:8px;">NO PASSENGERS — NOT LEAVING CAMPUS</button>` : ''}
@@ -1899,6 +1942,7 @@
       `;
     }
     const name = state.divertedName || state.pendingStop.name;
+    const sc2 = ensureStepperCounts(trip);
     return `
       <div class="card">
         <div class="card-label">Departing: ${name} <button class="link-btn" id="diff-loc-btn-depart">Different location?</button></div>
@@ -1913,24 +1957,24 @@
           </div>
           <div class="big-block">
             <div class="big-label">Going to APT</div>
-            <div class="big-stepper" id="stepper-going" data-count="0"><button data-d="-1">−</button><span class="big-num count">0</span><button data-d="1">+</button></div>
+            <div class="big-stepper" id="stepper-going" data-count="${sc2.going}"><button data-d="-1">−</button><span class="big-num count">${sc2.going}</span><button data-d="1">+</button></div>
           </div>
           <div class="big-block">
             <div class="big-label">Coming to AAMU</div>
-            <div class="big-stepper" id="stepper-coming" data-count="0"><button data-d="-1">−</button><span class="big-num count">0</span><button data-d="1">+</button></div>
+            <div class="big-stepper" id="stepper-coming" data-count="${sc2.coming}"><button data-d="-1">−</button><span class="big-num count">${sc2.coming}</span><button data-d="1">+</button></div>
           </div>
           <div class="big-block">
             <div class="big-label">Overflow</div>
-            <button class="big-toggle" id="overflow-toggle" data-active="0">NO OVERFLOW</button>
-            <div id="lb-refine" style="display:none;margin-top:8px;">
-              <div class="stepper" id="stepper-lb" data-count="1" style="display:flex;align-items:center;justify-content:center;gap:8px;"><button style="width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:white;" data-d="-1">−</button><span class="count" style="font-weight:800;">1</span><button style="width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:white;" data-d="1">+</button></div>
+            <button class="big-toggle" id="overflow-toggle" data-active="${sc2.overflow?1:0}">${sc2.overflow?'OVERFLOW':'NO OVERFLOW'}</button>
+            <div id="lb-refine" style="display:${sc2.overflow?'block':'none'};margin-top:8px;">
+              <div class="stepper" id="stepper-lb" data-count="${sc2.leftBehind||1}" style="display:flex;align-items:center;justify-content:center;gap:8px;"><button style="width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:white;" data-d="-1">−</button><span class="count" style="font-weight:800;">${sc2.leftBehind||1}</span><button style="width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:white;" data-d="1">+</button></div>
               <div style="font-size:10px;color:var(--muted);margin-top:2px;">left behind</div>
             </div>
           </div>
         </div>
         <div class="field" style="margin-bottom:10px;">
           <label style="font-size:10.5px;color:var(--muted);display:block;margin-bottom:4px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;">Note (optional)</label>
-          <input type="text" id="stop-depart-note" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:white;" placeholder="e.g. running late — traffic on University Dr">
+          <input type="text" id="stop-depart-note" value="${(state.pendingStopDepartNote||'').replace(/"/g,'&quot;')}" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:white;" placeholder="e.g. running late — traffic on University Dr">
         </div>
         <button class="btn btn-primary big-log-btn" id="log-departure-btn">LOG DEPARTURE &amp; CONTINUE</button>
       </div>
@@ -1941,6 +1985,7 @@
     if(state.stopPhase === 'depart_campus'){
       document.getElementById("fill-now-campus").onclick = () => { document.getElementById("campus-time-input").value = nowTime(); };
       startLiveClock("campus-time-input");
+      const scC = ensureStepperCounts(trip);
       ["going","coming"].forEach(kind=>{
         const box = document.getElementById("stepper-"+kind);
         box.querySelectorAll("button").forEach(btn=>{
@@ -1949,6 +1994,7 @@
             c = Math.max(0, c + parseInt(btn.dataset.d,10));
             box.dataset.count = c; box.querySelector(".count").textContent = c;
             box.classList.toggle("over", c > cap);
+            scC[kind] = c;
           };
         });
       });
@@ -1957,16 +2003,19 @@
       const lbBoxC = document.getElementById("stepper-lb");
       ofToggleC.onclick = () => {
         const active = ofToggleC.dataset.active === "1";
-        if(active){ ofToggleC.dataset.active="0"; ofToggleC.textContent="NO OVERFLOW"; ofToggleC.classList.remove("active"); lbRefineC.style.display="none"; }
-        else { ofToggleC.dataset.active="1"; ofToggleC.textContent="OVERFLOW"; ofToggleC.classList.add("active"); lbRefineC.style.display="block"; }
+        if(active){ ofToggleC.dataset.active="0"; ofToggleC.textContent="NO OVERFLOW"; ofToggleC.classList.remove("active"); lbRefineC.style.display="none"; scC.overflow=false; }
+        else { ofToggleC.dataset.active="1"; ofToggleC.textContent="OVERFLOW"; ofToggleC.classList.add("active"); lbRefineC.style.display="block"; scC.overflow=true; }
       };
       lbBoxC.querySelectorAll("button").forEach(btn=>{
         btn.onclick = () => {
           let c = parseInt(lbBoxC.dataset.count,10);
           c = Math.max(1, c + parseInt(btn.dataset.d,10));
           lbBoxC.dataset.count = c; lbBoxC.querySelector(".count").textContent = c;
+          scC.leftBehind = c;
         };
       });
+      const campusNoteInp = document.getElementById("campus-depart-note");
+      campusNoteInp.oninput = () => { state.pendingCampusDepartNote = campusNoteInp.value; };
       document.getElementById("log-campus-depart-btn").onclick = async () => {
         const btn = document.getElementById("log-campus-depart-btn");
         const originalText = btn.textContent;
@@ -1983,6 +2032,7 @@
           trip.departMeta = {timestamp:new Date().toISOString(), lat:geo.lat, lng:geo.lng, gpsError:geo.gpsError};
           trip.departGoing = going; trip.departComing = coming; trip.departLeftBehind = leftBehind; trip.departOverflow = overflow; trip.departAcknowledged = false;
           trip.departNote = (document.getElementById("campus-depart-note").value||"").trim();
+          state.pendingCampusDepartNote = '';
           await syncTrip(trip);
           state.stopPhase = 'arriving';
           renderLogPage();
@@ -2091,6 +2141,7 @@
       box.style.display = box.style.display==='none' ? 'block' : 'none';
       if(box.style.display==='block') document.getElementById("diff-loc-input-depart").focus();
     };
+    const sc2w = ensureStepperCounts(trip);
     ["going","coming"].forEach(kind=>{
       const box = document.getElementById("stepper-"+kind);
       box.querySelectorAll("button").forEach(btn=>{
@@ -2099,6 +2150,7 @@
           c = Math.max(0, c + parseInt(btn.dataset.d,10));
           box.dataset.count = c; box.querySelector(".count").textContent = c;
           box.classList.toggle("over", c > cap);
+          sc2w[kind] = c;
         };
       });
     });
@@ -2107,16 +2159,19 @@
     const lbBox = document.getElementById("stepper-lb");
     ofToggle.onclick = () => {
       const active = ofToggle.dataset.active === "1";
-      if(active){ ofToggle.dataset.active="0"; ofToggle.textContent="NO OVERFLOW"; ofToggle.classList.remove("active"); lbRefine.style.display="none"; }
-      else { ofToggle.dataset.active="1"; ofToggle.textContent="OVERFLOW"; ofToggle.classList.add("active"); lbRefine.style.display="block"; }
+      if(active){ ofToggle.dataset.active="0"; ofToggle.textContent="NO OVERFLOW"; ofToggle.classList.remove("active"); lbRefine.style.display="none"; sc2w.overflow=false; }
+      else { ofToggle.dataset.active="1"; ofToggle.textContent="OVERFLOW"; ofToggle.classList.add("active"); lbRefine.style.display="block"; sc2w.overflow=true; }
     };
     lbBox.querySelectorAll("button").forEach(btn=>{
       btn.onclick = () => {
         let c = parseInt(lbBox.dataset.count,10);
         c = Math.max(1, c + parseInt(btn.dataset.d,10));
         lbBox.dataset.count = c; lbBox.querySelector(".count").textContent = c;
+        sc2w.leftBehind = c;
       };
     });
+    const stopNoteInp = document.getElementById("stop-depart-note");
+    stopNoteInp.oninput = () => { state.pendingStopDepartNote = stopNoteInp.value; };
     document.getElementById("log-departure-btn").onclick = async () => {
       const btn = document.getElementById("log-departure-btn");
       const originalText = btn.textContent;
@@ -2142,12 +2197,12 @@
         };
         trip.stops.push(stopRecord);
         await syncTrip(trip);
-        state.pendingStop = null; state.divertedName='';
+        state.pendingStop = null; state.divertedName=''; state.pendingStopDepartNote = '';
 
         if(route.flexibleStops){
           state.stopPhase = 'flex_choice';
         } else if(trip.stops.length >= route.stops.length){
-          state.stopPhase = 'arrive_campus';
+          state.stopPhase = route.allowExtraStops ? 'flex_choice' : 'arrive_campus';
         } else {
           state.stopPhase = 'arriving';
         }
@@ -2626,7 +2681,7 @@
   }
 
   const ROUTE_BOX_LABEL = {
-    dean:"Dean", waterleaf:"Waterleaf", elroy:"Elroy", hsv_elroy:"HSV PL/Elroy",
+    dean:"Dean", waterleaf:"Waterleaf", elroy:"Elroy", hsv_elroy:"Olympia/HSV PL/Elroy",
     east_night:"East Night", west_night:"West Night",
     east_weekend:"East Wknd/Holiday", west_weekend:"West Wknd/Holiday",
     floater:"Floater"
