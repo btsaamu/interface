@@ -956,6 +956,7 @@
     pretripMileage:'', pretripExplains:{}, damageExplainText:'',
     stopPhase:'arriving', pendingStop:null, divertedName:'',
     stepperCounts:{going:0, coming:0, leftBehind:0, overflow:false, forPhaseKey:null},
+    onCampusRidershipCount:0,
     pendingIds:new Set(), changingRoute:false,
     dispatchTab:'live', lastSearch:null, lastIssues:[], showFullSchedule:false, editingRow:null, expandedRouteBoxes:new Set(), lastSignIns:[], lastSignInSearch:null, lastConsolidatedSearch:null, simplifiedRoutePassengers:{total:0, byRoute:{}, flagged:[]}, pretripPosttripToday:[], pretripPosttripLookup:null,
     day:{trips:[]}, lastKnownDay:{trips:[]}, pollHandle:null, flushHandle:null
@@ -1237,7 +1238,6 @@
     if(state.driverLock.status !== 'unlocked'){ renderDriverGate(); return; }
     const cs = currentShift();
     if(cs.shiftEnded){
-      if(!cs.posttrip || !cs.posttrip.done){ renderPostTripPage(); return; }
       renderDaySummaryPage(); return;
     }
     if(state.myTrip && !state.myTrip.complete){
@@ -1251,19 +1251,11 @@
   // ================= PRE-TRIP PAGE =================
   function renderPretripPage(){
     const lock = state.driverLock;
-    const already = !!(currentShift().pretrip && currentShift().pretrip.done);
     const asg = state.msAssignment;
     const routeDef = ROUTES[state.selectedRouteChoice];
     const isTrips = !!(routeDef && routeDef.dualVehicle);
     const tripIsEVVehicle = isTrips && EV_VEHICLES.some(v=>v.name===state.tripVehicleType);
-    const tripIsDieselVehicle = isTrips && TRIPS_DIESEL_VEHICLES.includes(state.tripVehicleType);
     const isEV = (!!(routeDef && routeDef.simplified) && routeDef.category==="On-Campus" && !isTrips) || tripIsEVVehicle;
-    const isDiesel = tripIsDieselVehicle;
-    const isVan = isTrips && state.tripVehicleType === 'Van';
-    const useSectioned = isEV || isDiesel;
-    const items = isDiesel ? DIESEL_PRETRIP_ITEMS : (isEV ? EV_PRETRIP_ITEMS : PRETRIP_ITEMS);
-    const mileageLabel = (isEV || isDiesel) ? 'Beginning Odometer' : 'Starting Mileage';
-    const fuelLabel = isEV ? 'Beginning Charge' : 'Starting Fuel';
     driverView.innerHTML = `
       <div class="card">
         <div class="card-label">Driver <button class="link-btn" id="change-driver-btn">Change Driver</button></div>
@@ -1294,7 +1286,6 @@
           <div class="field"><label>Capacity</label><input id="d-capacity" type="number" min="1" value="${state.shiftCapacity||DEFAULT_CAPACITY}"></div>
         </div>
         ${isEV ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Pick whichever bus is actually charged and available — your assignment may change if the vehicle you expected isn't ready.</div>` : ``}
-        ${isTrips ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">AL-1&ndash;AL-5 and Mini EV use the e-bus checklist; 799, 582, and 401 use the diesel bus checklist; Van uses the standard off-campus checklist.</div>` : ``}
         <div id="myweek-toggle" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line);cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
           <span style="font-size:11.5px;font-weight:700;color:var(--maroon-dark);text-transform:uppercase;letter-spacing:0.03em;">My Week</span>
           <span id="myweek-chevron" style="font-size:11px;color:var(--muted);">${state.myWeekExpanded ? '▾ Hide' : '▸ Show'}</span>
@@ -1319,7 +1310,7 @@
           <div style="font-size:15px;font-weight:800;color:var(--maroon-dark);margin:5px 0 2px;">${asg.holiday}</div>
           <div style="font-size:10px;color:var(--muted);">Check with dispatch if you're covering today</div>
           `}
-          ${!asg.holiday && !asg.trip && !already && !state.routeGridExpanded ? `<div style="margin-top:6px;"><button class="link-btn" id="show-route-grid-btn" style="font-size:10.5px;">Not right? Change route</button></div>` : ``}
+          ${!asg.holiday && !asg.trip && !state.routeGridExpanded ? `<div style="margin-top:6px;"><button class="link-btn" id="show-route-grid-btn" style="font-size:10.5px;">Not right? Change route</button></div>` : ``}
         </div>
         ${!asg.holiday ? `
         <div class="card" style="flex:1;background:#FBF3E1;border-color:#C7973F;text-align:center;padding:12px 10px;margin-bottom:0;">
@@ -1330,63 +1321,20 @@
           ` : `<div style="font-size:13px;font-weight:700;color:var(--muted);margin-top:8px;">None assignment</div>`}
         </div>` : ``}
       </div>` : ``}
-      ${(!asg || asg.holiday || state.routeGridExpanded || already) ? `
+      ${(!asg || asg.holiday || state.routeGridExpanded) ? `
       <div class="card">
         <div class="card-label">Pick Route</div>
-        ${asg && asg.routeKey && !asg.holiday && state.routeGridExpanded && !already ? `<div style="font-size:11px;color:var(--warn-orange);margin-bottom:8px;">Picking anything other than <strong>${routeShort(asg.routeKey)}</strong> notifies dispatch.</div>` : ``}
+        ${asg && asg.routeKey && !asg.holiday && state.routeGridExpanded ? `<div style="font-size:11px;color:var(--warn-orange);margin-bottom:8px;">Picking anything other than <strong>${routeShort(asg.routeKey)}</strong> notifies dispatch.</div>` : ``}
         <div id="route-grid"></div>
         <div class="disclosure" id="pretrip-next-run" style="display:none;"></div>
-        ${(isEV || isTrips) ? `<div style="font-size:11px;color:var(--muted);margin-top:8px;">This route logs a total passenger count on Post-Trip instead of counting at each stop — just Pre-Trip now, drive your route, then Post-Trip when you're done.</div>` : ``}
       </div>
       ` : ``}
-      <div class="card">
-        <div class="card-label">Pre-Trip Inspection</div>
-        ${already
-          ? `<div class="disclosure">✓ Pre-trip completed today at ${fmtSysTime(currentShift().pretrip.completedAt)}${currentShift().pretrip.checklist.some(c=>c.status==='bad')?' — issue(s) were reported.':''}${currentShift().pretrip.damage && currentShift().pretrip.damage.reported?' — damage was reported.':''}</div>
-             <div class="info-row"><span>${mileageLabel}</span><strong>${currentShift().pretrip.startingMileage||'—'}</strong></div>
-             <div class="info-row"><span>${fuelLabel}</span><strong>${currentShift().pretrip.startingFuel||'—'}</strong></div>`
-          : `<div class="field-row">
-               <div class="field-bignum"><label>${mileageLabel}</label><input id="pt-mileage" type="number" min="0" inputmode="numeric" placeholder="0" value="${state.pretripMileage||''}"></div>
-             </div>
-             <div class="pt-item">
-               <div class="pt-item-label">${isEV?'Beginning Charge':'Starting Fuel Level'}</div>
-               ${isEV ? chargeChipsHtml("pt-fuel-chips", state.pretripFuel) : fuelChipsHtml("pt-fuel-chips", state.pretripFuel)}
-             </div>
-             ${isEV ? `<div class="card" style="margin:14px -16px -14px -16px;border-radius:0 0 12px 12px;border-top:1px solid var(--line);">
-               <div class="card-label" style="margin-top:2px;">Quick Start Procedure</div>
-               <div style="font-size:11px;color:var(--muted);margin:-4px 0 8px;">Check off each step as you complete it, in order.</div>
-               <div id="quick-start-list"></div>
-             </div>` : ``}
-             <div id="pretrip-items"></div>
-             ${useSectioned ? `
-             <div class="pt-item">
-               <div class="pt-item-label">Any new or noticeable damage?</div>
-               <div class="pt-btns" id="damage-yn">
-                 <button class="pt-btn${state.pretripDamage==='no'?' sel-good':''}" data-val="no">No</button>
-                 <button class="pt-btn${state.pretripDamage==='yes'?' sel-bad':''}" data-val="yes">Yes</button>
-               </div>
-               <div id="damage-explain-wrap" style="display:${state.pretripDamage==='yes'?'block':'none'};margin-top:8px;">
-                 <input type="text" class="pt-explain" id="damage-explain" placeholder="Explain the damage" value="${(state.damageExplainText||'').replace(/"/g,'&quot;')}" style="display:block;">
-                 <label style="font-size:11.5px;color:var(--muted);display:block;margin:8px 0 4px;">Attach a photo</label>
-                 <input type="file" accept="image/*" capture="environment" id="pt-photo">
-                 <div id="pt-photo-preview">${state.pretripPhoto ? `<img src="${state.pretripPhoto}" style="max-width:140px;border-radius:8px;margin-top:6px;">` : ``}</div>
-               </div>
-             </div>` : `
-             <div class="pt-item">
-               <div class="pt-item-label">Photo of any damage (optional)</div>
-               <input type="file" accept="image/*" capture="environment" id="pt-photo">
-               <div id="pt-photo-preview">${state.pretripPhoto ? `<img src="${state.pretripPhoto}" style="max-width:140px;border-radius:8px;margin-top:6px;">` : ``}</div>
-             </div>`}`
-        }
-      </div>
       <button class="btn btn-primary big-log-btn" id="begin-route-btn">BEGIN ROUTE</button>
     `;
     const vInput = document.getElementById("d-vehicle");
     if(isTrips){
       vInput.onchange = () => {
         state.tripVehicleType = vInput.value;
-        state.pretripAnswers = {}; state.pretripExplains = {};
-        state.quickStartChecks = {}; state.pretripDamage = null;
         const foundEV = EV_VEHICLES.find(v=>v.name===state.tripVehicleType);
         if(foundEV) state.shiftCapacity = foundEV.capacity;
         renderPretripPage();
@@ -1418,129 +1366,22 @@
       showNextRun(state.selectedRouteChoice);
       wireRouteGrid(grid, (key) => {
         state.selectedRouteChoice = key;
-        state.pretripAnswers = {}; // question sets differ between EV and standard routes
-        state.quickStartChecks = {}; state.pretripDamage = null; state.tripVehicleType = null;
-        state.pretripExplains = {}; state.damageExplainText = ''; state.pretripPhoto = null;
+        state.tripVehicleType = null;
         renderPretripPage();
       });
-    }
-
-    if(!already){
-      const itemsBox = document.getElementById("pretrip-items");
-      function ptItemHtml(item, i){
-        const ans = state.pretripAnswers[i];
-        const explainVal = state.pretripExplains[i] || "";
-        return `
-          <div class="pt-item">
-            <div class="pt-item-label">${item}</div>
-            <div class="pt-btns" data-idx="${i}">
-              <button class="pt-btn${ans==='good'?' sel-good':''}" data-val="good">Good</button>
-              <button class="pt-btn${ans==='bad'?' sel-bad':''}" data-val="bad">Bad</button>
-              <button class="pt-btn${ans==='na'?' sel-na':''}" data-val="na">N/A</button>
-            </div>
-            <input type="text" class="pt-explain" id="ptx-explain-${i}" placeholder="Describe the issue" value="${explainVal.replace(/"/g,'&quot;')}" style="display:${ans==='bad'?'block':'none'};">
-          </div>`;
-      }
-      if(useSectioned){
-        let idx = 0;
-        const sections = isEV ? EV_PRETRIP_SECTIONS : DIESEL_PRETRIP_SECTIONS;
-        itemsBox.innerHTML = sections.map(section=>{
-          const rows = section.items.map(item=>ptItemHtml(item, idx++)).join("");
-          return `<div class="section-label" style="font-size:10.5px;font-weight:800;color:var(--maroon-dark);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px;padding-bottom:5px;border-bottom:2px solid var(--gold);">${section.label}</div>
-            ${section.note?`<div style="font-size:11px;color:var(--muted);margin:-2px 0 6px;">${section.note}</div>`:``}
-            ${rows}`;
-        }).join("");
-
-        if(isEV){
-          const qsBox = document.getElementById("quick-start-list");
-          qsBox.innerHTML = EV_QUICK_START_STEPS.map((step,i)=>{
-            const checked = !!state.quickStartChecks[i];
-            return `
-            <div class="check-row" data-qidx="${i}" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer;">
-              <div class="qs-box" style="width:22px;height:22px;border:2.5px solid ${checked?'var(--success)':'var(--maroon)'};border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:900;color:white;font-size:14px;background:${checked?'var(--success)':''};">${checked?'✓':''}</div>
-              <div style="font-size:13.5px;font-weight:600;">${step}</div>
-            </div>`;
-          }).join("");
-          qsBox.querySelectorAll(".check-row").forEach(row=>{
-            const i = row.dataset.qidx;
-            row.onclick = () => {
-              state.quickStartChecks[i] = !state.quickStartChecks[i];
-              const box = row.querySelector(".qs-box");
-              box.style.background = state.quickStartChecks[i] ? "var(--success)" : "";
-              box.style.borderColor = state.quickStartChecks[i] ? "var(--success)" : "var(--maroon)";
-              box.textContent = state.quickStartChecks[i] ? "✓" : "";
-              row.classList.remove("pt-error");
-            };
-          });
-        }
-      } else {
-        itemsBox.innerHTML = items.map((item,i)=>ptItemHtml(item, i)).join("");
-      }
-      itemsBox.querySelectorAll(".pt-btns").forEach(group=>{
-        const idx = group.dataset.idx;
-        group.querySelectorAll(".pt-btn").forEach(btn=>{
-          btn.onclick = () => {
-            group.querySelectorAll(".pt-btn").forEach(b=>b.classList.remove("sel-good","sel-bad","sel-na"));
-            btn.classList.add("sel-"+btn.dataset.val);
-            state.pretripAnswers[idx] = btn.dataset.val;
-            document.getElementById("ptx-explain-"+idx).style.display = btn.dataset.val==='bad' ? 'block' : 'none';
-            group.closest(".pt-item").classList.remove("pt-error");
-          };
-        });
-      });
-      itemsBox.querySelectorAll(".pt-explain").forEach(inp=>{
-        const idx = inp.id.replace("ptx-explain-","");
-        inp.oninput = () => { state.pretripExplains[idx] = inp.value; if(inp.value.trim()) inp.closest(".pt-item").classList.remove("pt-error"); };
-      });
-      document.getElementById("pt-mileage").oninput = (e) => { state.pretripMileage = e.target.value; if(e.target.value.trim()) e.target.closest(".field-bignum").classList.remove("pt-error-field"); };
-      wireFuelChips("pt-fuel-chips", f => { state.pretripFuel = f; });
-
-      if(useSectioned){
-        const dynBox = document.getElementById("damage-yn");
-        dynBox.querySelectorAll(".pt-btn").forEach(btn=>{
-          btn.onclick = () => {
-            dynBox.querySelectorAll(".pt-btn").forEach(b=>b.classList.remove("sel-good","sel-bad"));
-            btn.classList.add(btn.dataset.val==='yes' ? 'sel-bad' : 'sel-good');
-            state.pretripDamage = btn.dataset.val;
-            document.getElementById("damage-explain-wrap").style.display = btn.dataset.val==='yes' ? 'block' : 'none';
-            dynBox.closest(".pt-item").classList.remove("pt-error");
-          };
-        });
-        const damageExplainInp = document.getElementById("damage-explain");
-        if(damageExplainInp) damageExplainInp.oninput = () => { state.damageExplainText = damageExplainInp.value; if(damageExplainInp.value.trim()) dynBox.closest(".pt-item").classList.remove("pt-error"); };
-      }
-      document.getElementById("pt-photo").onchange = async (e) => {
-        const file = e.target.files[0]; if(!file) return;
-        const previewBox = document.getElementById("pt-photo-preview");
-        previewBox.innerHTML = `<div style="font-size:11px;color:var(--muted);">Compressing photo…</div>`;
-        try{
-          const compressed = await compressImageFile(file);
-          state.pretripPhoto = compressed;
-          previewBox.innerHTML = `<img src="${compressed}" style="max-width:140px;border-radius:8px;margin-top:6px;">`;
-        }catch(err){
-          previewBox.innerHTML = `<div style="font-size:11px;color:var(--alert-red);">Couldn't process that photo — try a different one.</div>`;
-        }
-      };
     }
 
     document.getElementById("change-driver-btn").onclick = () => logoutDriver();
-    document.getElementById("myweek-toggle").onclick = () => {
-      state.myWeekExpanded = !state.myWeekExpanded;
-      renderPretripPage();
-    };
+    document.getElementById("myweek-toggle").onclick = () => { state.myWeekExpanded = !state.myWeekExpanded; renderPretripPage(); };
     const nextWeekToggle = document.getElementById("nextweek-toggle");
-    if(nextWeekToggle){
-      nextWeekToggle.onclick = () => {
-        state.nextWeekExpanded = !state.nextWeekExpanded;
-        renderPretripPage();
-      };
-    }
+    if(nextWeekToggle){ nextWeekToggle.onclick = () => { state.nextWeekExpanded = !state.nextWeekExpanded; renderPretripPage(); }; }
+
     document.getElementById("begin-route-btn").onclick = async (e) => {
       const btn = e.target;
       const originalText = btn.textContent;
       btn.disabled = true; btn.style.opacity = "0.7"; btn.textContent = "STARTING…";
       try{
-        await beginRoute(already, items, isEV, useSectioned, isDiesel);
+        await beginRoute();
       } catch(err){
         console.error("beginRoute failed:", err);
         alert("Something went wrong starting your route, and it wasn't saved. Please check your connection and try again. If this keeps happening, tell dispatch what you were doing and this: " + (err && err.message ? err.message : String(err)));
@@ -1550,9 +1391,7 @@
     };
   }
 
-  async function beginRoute(already, items, isEV, useSectioned, isDiesel){
-    items = items || PRETRIP_ITEMS;
-    if(useSectioned === undefined) useSectioned = isEV;
+  async function beginRoute(){
     const routeGridEl0 = document.getElementById("route-grid");
     if(routeGridEl0) routeGridEl0.style.outline = "";
     document.getElementById("d-vehicle").classList.remove("pt-error-field");
@@ -1569,55 +1408,6 @@
       vf.classList.add("pt-error-field");
       firstError = firstError || vf;
     }
-
-    let quickStartOk = true, damageOk = true;
-    if(!already){
-      const mileageInput = document.getElementById("pt-mileage");
-      const mileage = mileageInput.value.trim();
-      if(!mileage){ mileageInput.closest(".field-bignum").classList.add("pt-error-field"); firstError = firstError || mileageInput; }
-
-      const fuelBox = document.getElementById("pt-fuel-chips");
-      if(!state.pretripFuel){ fuelBox.classList.add("pt-error-field"); firstError = firstError || fuelBox; }
-
-      if(isEV){
-        quickStartOk = EV_QUICK_START_STEPS.every((_,i)=>!!state.quickStartChecks[i]);
-        if(!quickStartOk){
-          const qsBox = document.getElementById("quick-start-list");
-          qsBox.querySelectorAll(".check-row").forEach(row=>{ if(!state.quickStartChecks[row.dataset.qidx]) row.classList.add("pt-error"); });
-          firstError = firstError || qsBox;
-        }
-      }
-      if(useSectioned){
-        const damageExplainInp = document.getElementById("damage-explain");
-        damageOk = !!state.pretripDamage && (state.pretripDamage!=='yes' || (damageExplainInp && damageExplainInp.value.trim()));
-        if(!damageOk){
-          const dynBox = document.getElementById("damage-yn").closest(".pt-item");
-          dynBox.classList.add("pt-error");
-          firstError = firstError || dynBox;
-        }
-      }
-
-      items.forEach((_,i)=>{
-        const itemEl = document.getElementById("ptx-explain-"+i).closest(".pt-item");
-        const answered = !!state.pretripAnswers[i];
-        const needsExplain = state.pretripAnswers[i]==='bad' && !document.getElementById("ptx-explain-"+i).value.trim();
-        if(!answered || needsExplain){ itemEl.classList.add("pt-error"); firstError = firstError || itemEl; }
-        else { itemEl.classList.remove("pt-error"); }
-      });
-
-      const itemsOk = !items.some((_,i)=> !state.pretripAnswers[i] || (state.pretripAnswers[i]==='bad' && !document.getElementById("ptx-explain-"+i).value.trim()));
-      if(!mileage || !state.pretripFuel || !itemsOk || !quickStartOk || !damageOk){
-        const missing = [];
-        if(!mileage) missing.push(isEV||isDiesel ? "beginning odometer" : "starting mileage");
-        if(!state.pretripFuel) missing.push(isEV ? "beginning charge level" : "starting fuel level");
-        if(!quickStartOk) missing.push("Quick Start Procedure steps");
-        if(!damageOk) missing.push("damage report (Yes/No, and an explanation if Yes)");
-        if(!itemsOk) missing.push("checklist item(s) below — including an explanation for anything marked Bad");
-        alert("Please complete before you can begin your route:\n\n• " + missing.join("\n• "));
-        if(firstError) firstError.scrollIntoView({behavior:"smooth", block:"center"});
-        return;
-      }
-    }
     if(!state.selectedRouteChoice || !vehicle){
       const missing = [];
       if(!state.selectedRouteChoice) missing.push("a route");
@@ -1627,32 +1417,18 @@
       return;
     }
 
-    if(!already){
-      const mileage = document.getElementById("pt-mileage").value.trim();
-      const checklist = items.map((item,i)=>({item, status:state.pretripAnswers[i], note: state.pretripAnswers[i]==='bad' ? document.getElementById("ptx-explain-"+i).value.trim() : ""}));
-      const pretripRecord = {done:true, route:state.selectedRouteChoice, vehicle, vehicleType: vehicle, capacity, startingMileage:mileage, startingFuel:state.pretripFuel, checklist, photo: state.pretripPhoto||null, completedAt:new Date().toISOString()};
-      if(isEV){
-        pretripRecord.quickStart = EV_QUICK_START_STEPS.map((step,i)=>({step, done: !!state.quickStartChecks[i]}));
-      }
-      if(useSectioned){
-        pretripRecord.damage = {reported: state.pretripDamage==='yes', explain: state.pretripDamage==='yes' ? (document.getElementById("damage-explain").value||"").trim() : ""};
-      }
-      currentShift().pretrip = pretripRecord;
-      state.shiftRoute = state.selectedRouteChoice; state.shiftVehicle = vehicle; state.shiftCapacity = capacity;
-      await Promise.all([
-        saveShiftRecord(state.driverLock.name, state.shiftRecord),
-        setVehicleCapacity(vehicle, capacity),
-        saveDriverProfile({name: state.driverLock.name, vehicle})
-      ]);
-    } else {
-      state.shiftRoute = state.selectedRouteChoice; state.shiftVehicle = vehicle; state.shiftCapacity = capacity;
-      await Promise.all([
-        setVehicleCapacity(vehicle, capacity),
-        saveDriverProfile({name: state.driverLock.name, vehicle})
-      ]);
-    }
+    // Pre-trip inspections are no longer collected — just a minimal record of what
+    // was selected, kept for consistency with older shift records.
+    currentShift().pretrip = {done:true, route:state.selectedRouteChoice, vehicle, vehicleType: vehicle, capacity, completedAt:new Date().toISOString()};
+    state.shiftRoute = state.selectedRouteChoice; state.shiftVehicle = vehicle; state.shiftCapacity = capacity;
+    await Promise.all([
+      saveShiftRecord(state.driverLock.name, state.shiftRecord),
+      setVehicleCapacity(vehicle, capacity),
+      saveDriverProfile({name: state.driverLock.name, vehicle})
+    ]);
     await startTripInternal();
   }
+
 
   async function startTripInternal(){
     const tripsToday = [...state.myCompletedTrips, ...(state.myTrip?[state.myTrip]:[])];
@@ -1679,13 +1455,20 @@
     const trip = state.myTrip;
     const asg = state.msAssignment;
     const tripDetails = asg && asg.trip;
+    const count = state.onCampusRidershipCount;
     driverView.innerHTML = `
       <div class="card">
-        <div class="card-label">En Route</div>
+        <div class="card-label">Today's Ridership</div>
         <div class="headsign">${routeShort(trip.route)}</div>
-        <div class="info-row"><span>Driver</span><strong>${trip.driver}</strong></div>
-        <div class="info-row"><span>Vehicle</span><strong>${trip.vehicle}</strong></div>
-        <div style="font-size:12px;color:var(--muted);margin-top:10px;">No stop-by-stop logging on this route — when you're done for the day, tap below and enter your total passenger count on Post-Trip.</div>
+        <div style="text-align:center;padding:20px 0;">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">Total Riders So Far</div>
+          <div style="font-size:72px;font-weight:900;color:var(--maroon-dark);line-height:1;margin:10px 0;" id="ridership-count-display">${count}</div>
+          <div style="display:flex;gap:14px;justify-content:center;margin-top:16px;">
+            <button id="ridership-minus" style="width:64px;height:64px;border-radius:50%;border:2px solid var(--maroon);background:white;color:var(--maroon);font-size:30px;font-weight:800;">−</button>
+            <button id="ridership-plus" style="width:64px;height:64px;border-radius:50%;border:none;background:var(--maroon);color:var(--gold-light);font-size:30px;font-weight:800;">+</button>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:12px;">Keep tapping + all day as riders board. Nothing submits until you tap below.</div>
+        </div>
       </div>
       ${tripDetails ? `
       <div class="card" style="background:#EEF6F1;border-color:#2F6E62;">
@@ -1697,9 +1480,31 @@
         ${tripDetails.pointOfContact ? `<div class="info-row"><span>Point of Contact</span><strong>${tripDetails.pointOfContact}</strong></div>` : ``}
         ${tripDetails.notes ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;font-weight:700;margin-bottom:3px;">Trip Notes</div><div style="font-size:13px;">${tripDetails.notes}</div></div>` : ``}
       </div>` : ``}
-      <button class="btn btn-primary big-log-btn" id="end-simple-route-btn">END ROUTE</button>
+      <button class="btn btn-primary big-log-btn" id="submit-ridership-count-btn">SUBMIT TOTAL RIDERSHIP</button>
     `;
-    document.getElementById("end-simple-route-btn").onclick = () => endShift();
+    document.getElementById("ridership-plus").onclick = () => {
+      state.onCampusRidershipCount++;
+      document.getElementById("ridership-count-display").textContent = state.onCampusRidershipCount;
+    };
+    document.getElementById("ridership-minus").onclick = () => {
+      state.onCampusRidershipCount = Math.max(0, state.onCampusRidershipCount - 1);
+      document.getElementById("ridership-count-display").textContent = state.onCampusRidershipCount;
+    };
+    document.getElementById("submit-ridership-count-btn").onclick = async () => {
+      const btn = document.getElementById("submit-ridership-count-btn");
+      const originalText = btn.textContent;
+      btn.disabled = true; btn.textContent = "SUBMITTING…";
+      try{
+        currentShift().posttrip = {done:true, totalPassengers: state.onCampusRidershipCount, completedAt:new Date().toISOString()};
+        await saveShiftRecord(state.driverLock.name, state.shiftRecord);
+        state.onCampusRidershipCount = 0;
+        await endShift();
+      } catch(err){
+        console.error("Ridership submit failed:", err);
+        alert("Something went wrong submitting your ridership count, and it wasn't saved. Please try again. If this keeps happening, tell dispatch this: " + (err && err.message ? err.message : String(err)));
+        if(document.body.contains(btn)){ btn.disabled = false; btn.textContent = originalText; }
+      }
+    };
   }
 
   // ================= LOG PAGE =================
@@ -2229,9 +2034,14 @@
       await syncTrip(trip);
     }
     currentShift().shiftEnded = true;
+    // Post-trip inspections are no longer collected. On-campus routes already recorded
+    // their ridership total directly; off-campus routes have nothing left to gather —
+    // mark it done automatically so dispatch's completions view reflects that correctly.
+    if(!currentShift().posttrip){
+      currentShift().posttrip = {done:true, completedAt:new Date().toISOString()};
+    }
     await saveShiftRecord(state.driverLock.name, state.shiftRecord);
-    state.postTripAnswers = {};
-    renderPostTripPage();
+    renderDaySummaryPage();
   }
 
   // ================= POST-TRIP PAGE =================
@@ -2326,15 +2136,18 @@
     const going = state.myCompletedTrips.reduce((s,t)=>s+t.stops.reduce((a,x)=>a+(x.going||0),0),0);
     const coming = state.myCompletedTrips.reduce((s,t)=>s+t.stops.reduce((a,x)=>a+(x.coming||0),0),0);
     const alreadySubmitted = !!currentShift().ridershipSubmitted;
+    const posttripTotal = currentShift().posttrip && typeof currentShift().posttrip.totalPassengers === 'number' ? currentShift().posttrip.totalPassengers : null;
     driverView.innerHTML = `
       <div class="headsign"><span>SHIFT COMPLETE — ${state.driverLock.name.toUpperCase()}</span></div>
       <div class="card" style="margin-top:12px;">
         <div class="card-label">Today's Ridership Log</div>
         ${alreadySubmitted ? `<div class="disclosure">✓ Ridership data was already submitted to your supervisor today.</div>` : ``}
         <div class="stat-grid">
-          <div class="stat-box"><div class="num">${state.myCompletedTrips.length}</div><div class="lbl">Trips</div></div>
-          <div class="stat-box"><div class="num">${going}</div><div class="lbl">Going to APT</div></div>
-          <div class="stat-box"><div class="num">${coming}</div><div class="lbl">Coming to AAMU</div></div>
+          ${posttripTotal!=null
+            ? `<div class="stat-box" style="grid-column:1/-1;"><div class="num">${posttripTotal}</div><div class="lbl">Total Riders Today</div></div>`
+            : `<div class="stat-box"><div class="num">${state.myCompletedTrips.length}</div><div class="lbl">Trips</div></div>
+               <div class="stat-box"><div class="num">${going}</div><div class="lbl">Going to APT</div></div>
+               <div class="stat-box"><div class="num">${coming}</div><div class="lbl">Coming to AAMU</div></div>`}
         </div>
         ${activeLogSheetHtml()}
       </div>
@@ -2358,6 +2171,7 @@
     state.shiftRoute = null; state.shiftVehicle = null; state.shiftCapacity = null; state.selectedRouteChoice = null;
     state.pretripAnswers = {}; state.pretripPhoto = null; state.pretripFuel = null; state.posttripFuel = null; state.postTripAnswers = {};
     state.pretripMileage = ''; state.pretripExplains = {}; state.damageExplainText = '';
+    state.onCampusRidershipCount = 0;
     state.myTrip = null;
     await renderDriverHome();
   }
