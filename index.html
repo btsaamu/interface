@@ -642,6 +642,29 @@
   function fmtSysTime(iso){ if(!iso) return ""; return new Date(iso).toLocaleTimeString([], {hour:"numeric", minute:"2-digit", second:"2-digit"}); }
   function fmtGeoShort(lat,lng,gpsError){ if(lat==null||lng==null) return `no GPS${gpsError?` (${gpsError})`:''}`; return `${lat.toFixed(4)}, ${lng.toFixed(4)}`; }
   function dayStorageKey(){ return "bts-day-"+todayKey(); }
+  // Same merge logic as loadDayForWrite (new per-trip keys + legacy blob fallback),
+  // but for an arbitrary past date instead of always today — used by search/export.
+  async function fetchTripsForDate(dateStr){
+    try{
+      const listRes = await window.storage.list(tripStorageKey(dateStr, ""), true);
+      const tripKeys = (listRes && listRes.keys) ? listRes.keys : [];
+      const fetched = await Promise.all(tripKeys.map(async key=>{
+        try{ const r = await window.storage.get(key, true); return r ? JSON.parse(r.value) : null; }
+        catch(e){ return null; }
+      }));
+      const tripsById = {};
+      fetched.forEach(t=>{ if(t && t.id) tripsById[t.id] = t; });
+      try{
+        const legacy = await window.storage.get("bts-day-"+dateStr, true);
+        if(legacy){
+          const raw = JSON.parse(legacy.value);
+          const legacyTrips = Array.isArray(raw.trips) ? raw.trips : Object.values(raw.trips || {});
+          legacyTrips.forEach(t=>{ if(t && t.id && !tripsById[t.id]) tripsById[t.id] = t; });
+        }
+      }catch(e){ /* no legacy blob for this date — normal */ }
+      return Object.values(tripsById);
+    }catch(e){ return []; }
+  }
   function tripStorageKey(dateStr, tripId){ return "bts-trip-"+dateStr+"-"+tripId; }
 
   function getGeo(){
@@ -2675,11 +2698,7 @@
   }
 
   async function computeConsolidatedRidership(dateStr, routeVal){
-    let trips = [];
-    try{
-      const r = await window.storage.get("bts-day-"+dateStr, true);
-      trips = (JSON.parse(r.value).trips) || [];
-    }catch(e){ trips = []; }
+    let trips = await fetchTripsForDate(dateStr);
     const routeKeys = routeVal==='all' ? Object.keys(ROUTES) : [routeVal];
     const rows = routeKeys.map(rk=>{
       let going=0, coming=0;
@@ -2765,11 +2784,8 @@
     const dates = dateRangeList(startVal, endVal);
     const rows = [];
     for(const dateStr of dates){
-      let trips = [];
-      try{
-        const r = await window.storage.get("bts-day-"+dateStr, true);
-        trips = (JSON.parse(r.value).trips) || [];
-      }catch(e){ continue; } // no data for this date, skip
+      let trips = await fetchTripsForDate(dateStr);
+      if(trips.length===0) continue; // no data for this date, skip
       if(routeVal !== "all") trips = trips.filter(t=>t.route===routeVal);
       trips.forEach(t=>{
         if(t.departAAMU && t.departMeta){
@@ -2862,17 +2878,7 @@
     if(!dateVal){ resultsBox.innerHTML = '<div class="empty-note">Pick a date to search.</div>'; return; }
     resultsBox.innerHTML = '<div class="empty-note">Searching…</div>';
     const signIns = await loadDriverSignIns(dateVal);
-    let dayData;
-    try{
-      const r = await window.storage.get("bts-day-"+dateVal, true);
-      dayData = JSON.parse(r.value);
-    }catch(e){
-      const html = `<div class="empty-note">No log sheets found for ${dateVal}.</div>${signInsHtml(signIns)}`;
-      state.lastSearch = {dateVal, routeVal, html};
-      resultsBox.innerHTML = html;
-      return;
-    }
-    let trips = dayData.trips || [];
+    let trips = await fetchTripsForDate(dateVal);
     if(routeVal !== "all") trips = trips.filter(t=>t.route===routeVal);
     let html;
     if(trips.length===0){
