@@ -93,6 +93,9 @@
   table.grid th{background:#F3EEE6;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#8a7d76;padding:7px 6px;text-align:left;border:1px solid var(--line);}
   table.grid td{padding:4px 6px;border:1px solid var(--line);}
   table.grid input, table.grid select{width:100%;padding:5px 6px;border:1px solid var(--line);border-radius:4px;font-size:12px;}
+  table.grid select.veh-sel{background:#FBF3E1;border-color:#C9A227;font-size:11px;font-weight:700;color:var(--maroon-dark);margin-top:4px;}
+  table.grid select.veh-sel.empty{background:#FDF1EF;border-color:var(--danger);color:var(--danger);}
+  .p-table td .p-veh.p-novehicle{color:#A63A2E;font-weight:700;}
   table.grid td.muted{color:#c8beb2;text-align:center;}
   .form-row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px;align-items:end;}
   .form-row div{display:flex;flex-direction:column;gap:3px;}
@@ -250,7 +253,6 @@ const DRIVER_APP_ROUTE_KEY = {
   "Drake": "drake",
   "Bulldog 1": "bulldog",
   "Normal Hills": "normal_hills",
-  "Floater": "floater",
   "Paratransit": "paratransit",
   "Paratransit Night": "paratransit_night"
 };
@@ -302,8 +304,6 @@ const DEFAULT_DATA = {
      days:{Mon:"Samantha",Tue:"Samantha",Wed:"UNASSIGNED",Thu:"Charles",Fri:"Charles"}},
     {name:"Normal Hills", cat:"On-Campus", vehicle:"Mini EV", cdl:true, start:"7:00",end:"18:00", splitEligible:true,
      days:{Mon:"Sylvester",Tue:"Sylvester",Wed:"Ola",Thu:"Sylvester",Fri:"Sylvester"}},
-    {name:"Floater", cat:"Off-Campus", vehicle:"Varies", cdl:false, start:"7:00",end:"18:00", splitEligible:true,
-     days:{Mon:"UNASSIGNED",Tue:"UNASSIGNED",Wed:"UNASSIGNED",Thu:"UNASSIGNED",Fri:"UNASSIGNED"}},
     {name:"Elroy", cat:"Off-Campus", vehicle:"Elroy Shuttle", cdl:false, start:"7:00",end:"18:00",
      days:{Mon:"Carla",Tue:"Les",Wed:"Carla",Thu:"Carla",Fri:"Carla"}},
     {name:"Huntsville Place/Elroy", cat:"Off-Campus", vehicle:"HSV PL/Elroy Shuttle", cdl:false, start:"7:00",end:"18:00",
@@ -427,6 +427,40 @@ const AVAILABILITY = {
   "Marion": {weekdayOnly:true}
 };
 
+// ---------- vehicle assignment (per route, per date) ----------
+const VEHICLE_GROUPS = [
+  {label:"Electric", items:["AL-1","AL-2","AL-3","AL-4","AL-5"]},
+  {label:"Diesel",   items:["219","391","401","582","799"]},
+  {label:"Other",    items:["25 PAX","Sprinter Van"]}
+];
+const VEHICLES = VEHICLE_GROUPS.reduce((a,g)=>a.concat(g.items),[]);
+// A vehicle explicitly picked for that date wins (including an explicit "none"). If nothing was
+// picked yet, fall back to the route's old static vehicle only when it is one of the 12 listed.
+function getVehicle(r, dateISO){
+  const m = DATA.vehicleByDate && DATA.vehicleByDate[dateISO];
+  if(m && m[r.name] !== undefined) return m[r.name];
+  return VEHICLES.includes(r.vehicle) ? r.vehicle : "";
+}
+function setVehicle(routeName, dateISO, val){
+  if(!DATA.vehicleByDate) DATA.vehicleByDate = {};
+  if(!DATA.vehicleByDate[dateISO]) DATA.vehicleByDate[dateISO] = {};
+  DATA.vehicleByDate[dateISO][routeName] = val;
+}
+function vehicleOptionsHTML(selected, blankLabel){
+  let html = `<option value="" ${!selected?'selected':''}>${blankLabel||'— Vehicle —'}</option>`;
+  VEHICLE_GROUPS.forEach(g=>{
+    html += `<optgroup label="${g.label}">` + g.items.map(v=>`<option value="${v}" ${v===selected?'selected':''}>${v}</option>`).join('') + `</optgroup>`;
+  });
+  return html;
+}
+function vehicleSelectHTML(selected, attrs){
+  return `<select class="veh-sel${selected?'':' empty'}" ${attrs}>${vehicleOptionsHTML(selected)}</select>`;
+}
+function vehPrintLine(r, dateISO){
+  const v = getVehicle(r, dateISO);
+  return v ? `<span class="p-veh">${v}</span>` : `<span class="p-veh p-novehicle">No vehicle assigned</span>`;
+}
+
 function migrateData(d){
   d.routes = d.routes.filter(r=>{
     if(r.name==="Bulldog 2") return false;
@@ -437,7 +471,7 @@ function migrateData(d){
   // split-shift buttons) would otherwise never get it just by loading new code, since
   // saved data always overrides the defaults wholesale. Anything depending on this flag
   // needs it set correctly regardless of when the route was first created.
-  const SPLIT_ELIGIBLE_ROUTE_NAMES = ["Drake","Bulldog 1","Paratransit","Normal Hills","Floater"];
+  const SPLIT_ELIGIBLE_ROUTE_NAMES = ["Drake","Bulldog 1","Paratransit","Normal Hills"];
   d.routes.forEach(r=>{
     if(SPLIT_ELIGIBLE_ROUTE_NAMES.includes(r.name)) r.splitEligible = true;
   });
@@ -481,12 +515,15 @@ function migrateData(d){
     const deanIdx = d.routes.findIndex(r=>r.name==="Dean");
     d.routes.splice(deanIdx>=0 ? deanIdx : d.routes.length, 0, fresh);
   }
-  // Floater: added after some schedules were already saved — inject it if missing.
-  if(!d.routes.some(r=>r.name==="Floater")){
-    const fresh = JSON.parse(JSON.stringify(DEFAULT_DATA.routes.find(r=>r.name==="Floater")));
-    const elroyIdx = d.routes.findIndex(r=>r.name==="Elroy");
-    d.routes.splice(elroyIdx>=0 ? elroyIdx : d.routes.length, 0, fresh);
-  }
+  // Floater route no longer exists — remove it (and its staged plans / lunch / vehicle picks) from saved data.
+  d.routes = d.routes.filter(r=>r.name!=="Floater");
+  if(d.weekOverrides) Object.values(d.weekOverrides).forEach(w=>{ if(w && w.Floater) delete w.Floater; });
+  if(d.vehicleByDate) Object.values(d.vehicleByDate).forEach(w=>{ if(w && w.Floater) delete w.Floater; });
+  if(d.publishedPreview && d.publishedPreview.days) Object.values(d.publishedPreview.days).forEach(x=>{
+    if(x && x.routes) delete x.routes.Floater;
+    if(x && x.lunch) delete x.lunch.Floater;
+  });
+  if(!d.vehicleByDate) d.vehicleByDate = {};
   d.routes.forEach(r=>{
     if(r.days) Object.keys(r.days).forEach(day=>{ r.days[day] = renameDriverString(r.days[day]); });
     if(r.shifts2) Object.values(r.shifts2).forEach(arr=>arr.forEach(s=>{ s.driver = renameDriverString(s.driver); }));
@@ -558,15 +595,16 @@ function printRouteRowCells(r, days){
     }
     if(r.shifts2 && r.shifts2[d]){
       const names = r.shifts2[d].map(s=> s.driver==='UNASSIGNED' ? '<span class="p-unassigned">UNASSIGNED</span>' : s.driver).join(' / ');
-      return `<td>${names}</td>`;
+      return `<td>${names}${vehPrintLine(r, dateISO)}</td>`;
     }
-    return printCellHtml(r.days[d]);
+    if(r.days[d]===undefined || r.days[d]==='N/A') return printCellHtml(r.days[d]);
+    return printCellHtml(r.days[d]).replace(/<\/td>$/, vehPrintLine(r, dateISO)+'</td>');
   }).join('');
 }
 function buildWeekPrintHtml(){
   const monLabel = fmtFullDate(WEEK.Mon).replace(/, \d{4}$/,'');
   const sunLabel = fmtFullDate(WEEK.Sun);
-  const rows = DATA.routes.map(r=>`<tr><td class="p-route">${r.name}<span class="p-veh">${r.vehicle}</span></td>${printRouteRowCells(r, DAYS)}</tr>`).join('');
+  const rows = DATA.routes.map(r=>`<tr><td class="p-route">${r.name}</td>${printRouteRowCells(r, DAYS)}</tr>`).join('');
   return `
     <div class="p-header">
       <div><h1>BTS WEEK SCHEDULE</h1><div class="p-sub">Week of ${monLabel} &ndash; ${sunLabel}</div></div>
@@ -605,7 +643,7 @@ function buildDailyPrintHtml(day){
     const timeCell = lunch
       ? (lunch.time ? `<td class="p-time-col">${label(lunch.time)}</td>` : `<td class="p-time-col"><span class="p-none">&mdash;</span></td>`)
       : `<td class="p-time-col"><span class="p-none">No lunch relief needed</span></td>`;
-    const vehLabel = r.vehicle ? `<span class="p-veh">${r.vehicle}</span>` : `<span class="p-veh p-novehicle">No vehicle assigned</span>`;
+    const vehLabel = vehPrintLine(r, dateISO);
     return `<tr><td class="p-route">${r.name}${vehLabel}</td>${driverCell}${reliefCell}${timeCell}</tr>`;
   }
 
@@ -702,6 +740,9 @@ function snapshotToday(){
       r.shifts2[day].forEach((s,si)=>{ snap[`${r.name} (${si===0?'AM':'PM'})`] = s.driver; });
     } else if(r.days && r.days[day]!==undefined){
       snap[r.name] = r.days[day];
+    }
+    if(r.lunch && r.lunch[day] && r.lunch[day].driver){
+      snap[`${r.name} (Lunch Relief)`] = r.lunch[day].driver;
     }
   });
   DATA.relief.forEach(rel=>{
@@ -806,7 +847,7 @@ function getConcerns(){
     Object.keys(r.days).forEach(day=>{
       if(DATA.holidays[WEEK[day]]) return; // this date runs the holiday schedule instead — no coverage needed here
       if(r.days[day] === "UNASSIGNED"){
-        list.push({type:"Unassigned shift", day, detail:`${r.name} (${r.vehicle}) has no driver on ${day}.`,
+        list.push({type:"Unassigned shift", day, detail:`${r.name} has no driver on ${day}.`,
           action:()=>{ currentDay=day; showView('schedule'); flashRoute(r.name, day); }});
       }
     });
@@ -1256,7 +1297,7 @@ function renderSchedule(){
     weekendRoutes.forEach(r=>{
       const row=document.createElement('div'); row.className='row';
       const rlabel=document.createElement('div'); rlabel.className='rlabel';
-      rlabel.innerHTML = `<b>${r.name}</b><span>${r.vehicle}</span>`;
+      rlabel.innerHTML = `<b>${r.name}</b><span>${getVehicle(r, WEEK[day]) || "No vehicle assigned"}</span>`;
       const track=document.createElement('div'); track.className='track';
       const seg=document.createElement('div'); seg.className='seg';
       const cur = holidayForDay.assignments[r.name];
@@ -1289,7 +1330,7 @@ function renderSchedule(){
         r.shifts2[day].forEach((s,si)=>{
           const row=document.createElement('div'); row.className='row';
           const rlabel=document.createElement('div'); rlabel.className='rlabel';
-          rlabel.innerHTML = `<b>${r.name} — ${si===0?'AM':'PM'}</b><span>${r.vehicle.split('/')[si] ? r.vehicle.split('/')[si].trim() : r.vehicle}</span>`;
+          rlabel.innerHTML = `<b>${r.name} — ${si===0?'AM':'PM'}</b><span>${getVehicle(r, WEEK[day]) || "No vehicle assigned"}</span>`;
           const track=document.createElement('div'); track.className='track';
           const seg=document.createElement('div'); seg.className='seg'+(r.cdl?' cdl':'');
           seg.setAttribute('data-route', r.name); seg.setAttribute('data-day', day);
@@ -1308,7 +1349,7 @@ function renderSchedule(){
       }
       const row=document.createElement('div'); row.className='row';
       const rlabel=document.createElement('div'); rlabel.className='rlabel';
-      rlabel.innerHTML = `<b>${r.name}</b><span>${r.vehicle}</span>`;
+      rlabel.innerHTML = `<b>${r.name}</b><span>${getVehicle(r, WEEK[day]) || "No vehicle assigned"}</span>`;
       const track=document.createElement('div'); track.className='track';
       const seg=document.createElement('div'); seg.className='seg'+(r.cdl?' cdl':'');
       seg.setAttribute('data-route', r.name); seg.setAttribute('data-day', day);
@@ -1473,11 +1514,12 @@ function buildWeekPrintHtmlFromSnapshot(snapshot){
       if(val===undefined) return `<td class="p-dash">&mdash;</td>`;
       if(Array.isArray(val)){
         const names = val.map(v=> v==='UNASSIGNED' ? '<span class="p-unassigned">UNASSIGNED</span>' : v).join(' / ');
-        return `<td>${names}</td>`;
+        return `<td>${names}${vehPrintLine(r, weekDates[d])}</td>`;
       }
-      return printCellHtml(val);
+      if(val==='N/A') return printCellHtml(val);
+      return printCellHtml(val).replace(/<\/td>$/, vehPrintLine(r, weekDates[d])+'</td>');
     }).join('');
-    return `<tr><td class="p-route">${r.name}<span class="p-veh">${r.vehicle}</span></td>${cells}</tr>`;
+    return `<tr><td class="p-route">${r.name}</td>${cells}</tr>`;
   }).join('');
   return `
     <div class="p-header">
@@ -1513,7 +1555,7 @@ function renderLunch(){
   }).join('') + '<th>Set whole week</th></tr>';
   lunchRoutes.forEach((r)=>{
     const ri = DATA.routes.indexOf(r);
-    html += `<tr><td><b>${r.name}</b><br><span class="note">${r.vehicle}</span></td>`;
+    html += `<tr><td><b>${r.name}</b></td>`;
     lunchDays.forEach(d=>{
       if(!r.lunch[d]){ html += `<td class="muted">—</td>`; return; }
       const holiday = DATA.holidays[WEEK[d]];
@@ -1608,10 +1650,11 @@ function renderWeek(){
     return `<th class="${marked?'ns-on':''}">${d}<br><span style="font-weight:400;">${fmtDate(dateISO)}</span>${toggleHtml}</th>`;
   }).join('') + '<th>Set whole week</th></tr>';
   DATA.routes.forEach((r,ri)=>{
-    html += `<tr><td><b>${r.name}</b><br><span class="note">${r.vehicle}</span></td>`;
+    html += `<tr><td><b>${r.name}</b></td>`;
     DAYS.forEach(d=>{
       const dateISO = WEEK[d];
       const holiday = DATA.holidays[dateISO];
+      const vehHtml = vehicleSelectHTML(getVehicle(r, dateISO), `data-veh-route="${r.name}" data-veh-date="${dateISO}"`);
       const isWeekendRoute = (r.name==="East WKND" || r.name==="West WKND");
       if(holiday){
         if(isWeekendRoute){
@@ -1627,16 +1670,18 @@ function renderWeek(){
         html += `<td>` + r.shifts2[d].map((s,si)=>{
           const val = s.driver==="UNASSIGNED" ? "" : s.driver;
           return `<select data-ri="${ri}" data-day="${d}" data-shift="${si}" style="margin-bottom:3px;">${driverOptionsHTML(val)}</select>`;
-        }).join('') + (r.splitEligible ? `<button class="linkbtn-sm" data-merge-shift="${ri}" data-merge-day="${d}">Merge to one shift</button>` : ``) + `</td>`;
+        }).join('') + vehHtml + (r.splitEligible ? `<button class="linkbtn-sm" data-merge-shift="${ri}" data-merge-day="${d}">Merge to one shift</button>` : ``) + `</td>`;
       } else if(r.days[d]===undefined){ html += `<td class="muted">—</td>`; }
       else {
         const val = r.days[d]==="UNASSIGNED" ? "" : r.days[d];
-        html += `<td><select data-ri="${ri}" data-day="${d}">${driverOptionsHTML(val)}</select>` + (r.splitEligible ? `<button class="linkbtn-sm" data-split-shift="${ri}" data-split-day="${d}">+ Split shift (7&ndash;12 / 11:30&ndash;6)</button>` : ``) + `</td>`;
+        html += `<td><select data-ri="${ri}" data-day="${d}">${driverOptionsHTML(val)}</select>` + vehHtml + (r.splitEligible ? `<button class="linkbtn-sm" data-split-shift="${ri}" data-split-day="${d}">+ Split shift (7&ndash;12 / 11:30&ndash;6)</button>` : ``) + `</td>`;
       }
     });
     html += `<td>
       <select id="bulkWeek-${ri}" style="margin-bottom:4px;">${driverOptionsHTML('')}</select>
       <button class="addbtn" data-bulk-week="${ri}" style="width:100%;padding:5px 0;font-size:10.5px;">Apply</button>
+      <select id="bulkWeekVeh-${ri}" class="veh-sel" style="margin-top:8px;">${vehicleOptionsHTML('')}</select>
+      <button class="addbtn" data-bulk-week-veh="${ri}" style="width:100%;padding:5px 0;font-size:10.5px;margin-top:4px;">Apply vehicle</button>
     </td>`;
     html += '</tr>';
   });
@@ -1708,8 +1753,28 @@ function renderWeek(){
       renderWeek();
     };
   });
+  table.querySelectorAll('select[data-veh-date]').forEach(sel=>{
+    sel.onchange = ()=>{
+      setVehicle(sel.dataset.vehRoute, sel.dataset.vehDate, sel.value);
+      sel.classList.toggle('empty', !sel.value);
+      saveData();
+    };
+  });
+  table.querySelectorAll('[data-bulk-week-veh]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const r = DATA.routes[parseInt(btn.dataset.bulkWeekVeh)];
+      const val = document.getElementById('bulkWeekVeh-'+btn.dataset.bulkWeekVeh).value;
+      DAYS.forEach(d=>{
+        if(r.days[d]===undefined && !(r.shifts2 && r.shifts2[d])) return; // route doesn't run that day
+        setVehicle(r.name, WEEK[d], val);
+      });
+      saveData();
+      renderWeek();
+    };
+  });
   table.querySelectorAll('select').forEach(inp=>{
-    if(inp.id && inp.id.startsWith('bulkWeek-')) return;
+    if(inp.id && (inp.id.startsWith('bulkWeek-') || inp.id.startsWith('bulkWeekVeh-'))) return;
+    if(inp.dataset.vehDate !== undefined) return;
     if(inp.dataset.holidayDate !== undefined) return;
     inp.onchange = ()=>{
       const ri = parseInt(inp.dataset.ri), d = inp.dataset.day;
@@ -1811,9 +1876,10 @@ function renderWeek(){
     return `<th class="${marked?'ns-on':''}">${d}<br><span style="font-weight:400;">${fmtDate(dateISO)}</span>${toggleHtml}</th>`;
   }).join('') + '<th>Set whole week</th></tr>';
   DATA.routes.forEach((r,ri)=>{
-    phtml += `<tr><td><b>${r.name}</b><br><span class="note">${r.vehicle}</span></td>`;
+    phtml += `<tr><td><b>${r.name}</b></td>`;
     DAYS.forEach(d=>{
       const dateISO = planWeek[d];
+      const vehHtml = vehicleSelectHTML(getVehicle(r, dateISO), `data-veh-route="${r.name}" data-veh-date="${dateISO}"`);
       const holiday = getPlannedHoliday(planSelectedMonday, dateISO);
       const isWeekendRoute = (r.name==="East WKND" || r.name==="West WKND");
       if(holiday){
@@ -1834,19 +1900,21 @@ function renderWeek(){
         phtml += `<td>` + vals.map((val,si)=>{
           const shown = val==="UNASSIGNED" ? "" : val;
           return `<select data-plan-split-ri="${ri}" data-plan-split-day="${d}" data-plan-split-idx="${si}" style="margin-bottom:3px;${isOverride?'border-color:#C7973F;border-width:2px;':''}">${driverOptionsHTML(shown)}</select>`;
-        }).join('') + (r.splitEligible ? `<button class="linkbtn-sm" data-plan-merge-ri="${ri}" data-plan-merge-day="${d}">Merge to one shift</button>` : ``) + `</td>`;
+        }).join('') + vehHtml + (r.splitEligible ? `<button class="linkbtn-sm" data-plan-merge-ri="${ri}" data-plan-merge-day="${d}">Merge to one shift</button>` : ``) + `</td>`;
       } else if(r.days[d]===undefined && !(r.shifts2 && r.shifts2[d])){
         phtml += `<td class="muted">—</td>`;
       } else {
         const val = ov !== undefined ? ov : r.days[d];
         const shown = (!val || val==="UNASSIGNED") ? "" : val;
         const isOverride = ov !== undefined;
-        phtml += `<td><select data-ri="${ri}" data-day="${d}" style="${isOverride?'border-color:#C7973F;border-width:2px;':''}">${driverOptionsHTML(shown)}</select>` + (r.splitEligible ? `<button class="linkbtn-sm" data-plan-split-btn-ri="${ri}" data-plan-split-btn-day="${d}">+ Split shift (7&ndash;12 / 11:30&ndash;6)</button>` : ``) + `</td>`;
+        phtml += `<td><select data-ri="${ri}" data-day="${d}" style="${isOverride?'border-color:#C7973F;border-width:2px;':''}">${driverOptionsHTML(shown)}</select>` + vehHtml + (r.splitEligible ? `<button class="linkbtn-sm" data-plan-split-btn-ri="${ri}" data-plan-split-btn-day="${d}">+ Split shift (7&ndash;12 / 11:30&ndash;6)</button>` : ``) + `</td>`;
       }
     });
     phtml += `<td>
       <select id="bulkPlan-${ri}" style="margin-bottom:4px;">${driverOptionsHTML('')}</select>
       <button class="addbtn" data-bulk-plan="${ri}" style="width:100%;padding:5px 0;font-size:10.5px;">Apply</button>
+      <select id="bulkPlanVeh-${ri}" class="veh-sel" style="margin-top:8px;">${vehicleOptionsHTML('')}</select>
+      <button class="addbtn" data-bulk-plan-veh="${ri}" style="width:100%;padding:5px 0;font-size:10.5px;margin-top:4px;">Apply vehicle</button>
     </td>`;
     phtml += '</tr>';
   });
@@ -1929,8 +1997,28 @@ function renderWeek(){
       renderWeek();
     };
   });
+  planTable.querySelectorAll('select[data-veh-date]').forEach(sel=>{
+    sel.onchange = ()=>{
+      setVehicle(sel.dataset.vehRoute, sel.dataset.vehDate, sel.value);
+      sel.classList.toggle('empty', !sel.value);
+      saveData();
+    };
+  });
+  planTable.querySelectorAll('[data-bulk-plan-veh]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const r = DATA.routes[parseInt(btn.dataset.bulkPlanVeh)];
+      const val = document.getElementById('bulkPlanVeh-'+btn.dataset.bulkPlanVeh).value;
+      DAYS.forEach(d=>{
+        if(r.days[d]===undefined && !(r.shifts2 && r.shifts2[d])) return;
+        setVehicle(r.name, planWeek[d], val);
+      });
+      saveData();
+      renderWeek();
+    };
+  });
   planTable.querySelectorAll('select').forEach(inp=>{
-    if(inp.id && inp.id.startsWith('bulkPlan-')) return;
+    if(inp.id && (inp.id.startsWith('bulkPlan-') || inp.id.startsWith('bulkPlanVeh-'))) return;
+    if(inp.dataset.vehDate !== undefined) return;
     if(inp.dataset.planHolidayDate !== undefined) return;
     if(inp.dataset.planSplitRi !== undefined) return;
     inp.onchange = ()=>{
