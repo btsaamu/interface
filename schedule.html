@@ -308,7 +308,7 @@ const DEFAULT_DATA = {
      days:{Mon:"Carla",Tue:"Les",Wed:"Carla",Thu:"Carla",Fri:"Carla"}},
     {name:"Huntsville Place/Elroy", cat:"Off-Campus", vehicle:"HSV PL/Elroy Shuttle", cdl:false, start:"7:00",end:"18:00",
      days:{Mon:"UNASSIGNED",Tue:"UNASSIGNED",Wed:"UNASSIGNED",Thu:"UNASSIGNED",Fri:"UNASSIGNED"}},
-    {name:"Dean", cat:"Off-Campus", vehicle:"Dean Shuttle", cdl:false, start:"7:00",end:"18:00",
+    {name:"Dean", cat:"Off-Campus", vehicle:"Dean Shuttle", cdl:false, start:"7:00",end:"18:00", splitEligible:true,
      days:{Mon:"Donna",Tue:"Donna",Wed:"Donna",Thu:"Brandi",Fri:"Donna"}},
     {name:"Waterleaf", cat:"Off-Campus", vehicle:"Waterleaf Shuttle", cdl:false, start:"7:00",end:"18:00",
      days:{Mon:"Tammy",Tue:"Brandi",Wed:"Tammy",Thu:"Tammy",Fri:"Tammy"}},
@@ -429,7 +429,7 @@ const AVAILABILITY = {
 
 // ---------- vehicle assignment (per route, per date) ----------
 const VEHICLE_GROUPS = [
-  {label:"Electric", items:["AL-1","AL-2","AL-3","AL-4","AL-5"]},
+  {label:"Electric", items:["AL-1","AL-2","AL-3","AL-4","AL-5","Optimal EV"]},
   {label:"Diesel",   items:["219","391","401","582","799"]},
   {label:"Other",    items:["25 PAX","Sprinter Van"]}
 ];
@@ -471,7 +471,7 @@ function migrateData(d){
   // split-shift buttons) would otherwise never get it just by loading new code, since
   // saved data always overrides the defaults wholesale. Anything depending on this flag
   // needs it set correctly regardless of when the route was first created.
-  const SPLIT_ELIGIBLE_ROUTE_NAMES = ["Drake","Bulldog 1","Paratransit","Normal Hills"];
+  const SPLIT_ELIGIBLE_ROUTE_NAMES = ["Drake","Bulldog 1","Paratransit","Normal Hills","Dean"];
   d.routes.forEach(r=>{
     if(SPLIT_ELIGIBLE_ROUTE_NAMES.includes(r.name)) r.splitEligible = true;
   });
