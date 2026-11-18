@@ -129,6 +129,15 @@
     .p-table-daily td.p-route{font-size:17px;font-weight:800;}
     .p-table-daily td.p-route .p-veh{font-size:9.5px;margin-top:2px;}
     .p-table-daily td.p-route .p-veh.p-novehicle{color:#A63A2E;font-weight:700;}
+    /* Large-print weekly schedule (for drivers with vision issues) */
+    .p-table-week th{font-size:14px;padding:5px 6px;}
+    .p-table-week td{font-size:22px;font-weight:800;padding:5px 6px;line-height:1.1;}
+    .p-table-week th:nth-child(1){width:13%;}
+    .p-table-week th:nth-child(n+2):nth-child(-n+6){width:13%;}
+    .p-table-week th:nth-child(n+7){width:11%;}
+    .p-table-week td.p-route{font-size:18px;font-weight:800;}
+    .p-table-week td.p-dash{font-size:18px;}
+    .p-table-week td.p-unassigned{font-size:16px;}
     .p-table-daily td.p-driver-col{font-size:19px;font-weight:800;}
     .p-table td.p-relief-col{font-size:16px;font-weight:800;color:#221B1A;}
     .p-table td.p-time-col{font-size:13px;font-weight:700;}
@@ -579,7 +588,7 @@ function printCellHtml(val, extraClass){
   if(val===undefined) return `<td class="p-dash${cls}">&mdash;</td>`;
   if(val==='UNASSIGNED') return `<td class="p-unassigned${cls}">UNASSIGNED</td>`;
   if(val==='N/A') return `<td class="p-dash${cls}">N/A</td>`;
-  return `<td class="${extraClass||''}">${val}</td>`;
+  return `<td class="${extraClass||''}">${String(val).replace(/\//g,'/<wbr>')}</td>`;
 }
 function printRouteRowCells(r, days){
   const isWeekendRoute = (r.name==="East WKND" || r.name==="West WKND");
@@ -595,10 +604,9 @@ function printRouteRowCells(r, days){
     }
     if(r.shifts2 && r.shifts2[d]){
       const names = r.shifts2[d].map(s=> s.driver==='UNASSIGNED' ? '<span class="p-unassigned">UNASSIGNED</span>' : s.driver).join(' / ');
-      return `<td>${names}${vehPrintLine(r, dateISO)}</td>`;
+      return `<td>${names}</td>`;
     }
-    if(r.days[d]===undefined || r.days[d]==='N/A') return printCellHtml(r.days[d]);
-    return printCellHtml(r.days[d]).replace(/<\/td>$/, vehPrintLine(r, dateISO)+'</td>');
+    return printCellHtml(r.days[d]);
   }).join('');
 }
 function buildWeekPrintHtml(){
@@ -610,7 +618,7 @@ function buildWeekPrintHtml(){
       <div><h1>BTS WEEK SCHEDULE</h1><div class="p-sub">Week of ${monLabel} &ndash; ${sunLabel}</div></div>
       <div class="p-subject-change">SUBJECT TO CHANGE</div>
     </div>
-    <table class="p-table">
+    <table class="p-table p-table-week">
       <tr><th>Route</th>${DAYS.map(d=>`<th>${d} ${fmtDate(WEEK[d])}</th>`).join('')}</tr>
       ${rows}
     </table>`;
@@ -1514,10 +1522,9 @@ function buildWeekPrintHtmlFromSnapshot(snapshot){
       if(val===undefined) return `<td class="p-dash">&mdash;</td>`;
       if(Array.isArray(val)){
         const names = val.map(v=> v==='UNASSIGNED' ? '<span class="p-unassigned">UNASSIGNED</span>' : v).join(' / ');
-        return `<td>${names}${vehPrintLine(r, weekDates[d])}</td>`;
+        return `<td>${names}</td>`;
       }
-      if(val==='N/A') return printCellHtml(val);
-      return printCellHtml(val).replace(/<\/td>$/, vehPrintLine(r, weekDates[d])+'</td>');
+      return printCellHtml(val);
     }).join('');
     return `<tr><td class="p-route">${r.name}</td>${cells}</tr>`;
   }).join('');
@@ -1527,7 +1534,7 @@ function buildWeekPrintHtmlFromSnapshot(snapshot){
       <div class="p-subject-change">SUBJECT TO CHANGE</div>
     </div>
     <div style="background:#FBF3E1;border:1.5px solid #C7973F;border-radius:5px;padding:4px 10px;margin-bottom:6px;font-size:9px;color:#5a4a1f;font-weight:800;text-transform:uppercase;letter-spacing:0.03em;">Preview &mdash; not yet the live schedule</div>
-    <table class="p-table">
+    <table class="p-table p-table-week">
       <tr><th>Route</th>${DAYS.map(d=>`<th>${d} ${fmtDate(weekDates[d])}</th>`).join('')}</tr>
       ${rows}
     </table>`;
